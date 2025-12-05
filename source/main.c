@@ -331,11 +331,19 @@ int launch_payload(char *path) {
 
 u8 get_burnt_fuses() {
     u8 fuse_count = 0;
+    u32 fuse_odm6 = fuse_read_odm(6);
     u32 fuse_odm7 = fuse_read_odm(7);
+
+    for (u32 i = 0; i < 32; i++) {
+        if ((fuse_odm6 >> i) & 1)
+            fuse_count++;
+    }
+
     for (u32 i = 0; i < 32; i++) {
         if ((fuse_odm7 >> i) & 1)
             fuse_count++;
     }
+
     return fuse_count;
 }
 
@@ -527,7 +535,7 @@ void show_fuse_check_horizontal(u8 burnt_fuses, u8 fw_major, u8 fw_minor, u8 fw_
     SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
     gfx_printf("Burnt Fuses: ");
     SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
-    gfx_printf("%2d / 32", burnt_fuses);
+    gfx_printf("%2d", burnt_fuses);
 
     gfx_con_setpos(200, 250);
     SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
