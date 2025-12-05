@@ -6,7 +6,7 @@
 
 A Nintendo Switch payload that checks your console's burnt fuse count against the installed firmware version to determine if Official Firmware (OFW) will boot properly.
 
-> **Based on:** [Lockpick_RCMaster](https://github.com/THZoria/Lockpick_RCMaster) by THZoria, with fuse checking logic inspired by the fuse-check project and UI design from TegraExplorer.
+> **Based on:** [Lockpick_RCM_Pro](https://github.com/sthetix/Lockpick_RCM_Pro), with fuse checking logic inspired by the fuse-check project and UI design from [TegraExplorer](https://github.com/suchmememanyskill/TegraExplorer) and NCA Database checking from [NxNandManager](https://github.com/eliboa/NxNandManager)
 
 ## What is FuseCheck?
 
