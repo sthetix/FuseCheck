@@ -18,7 +18,7 @@ Nintendo uses a hardware anti-downgrade mechanism called "fuse burning." Each ma
 
 - **Too few fuses burnt** = Console will black screen on OFW boot
 - **Correct fuse count** = OFW will boot normally
-- **Extra fuses burnt** = OFW will boot, but you can't downgrade below a certain version
+- **Extra fuses burnt** = Console will black screen on OFW boot
 
 ## Features
 
@@ -46,7 +46,7 @@ Nintendo uses a hardware anti-downgrade mechanism called "fuse burning." Each ma
 - **Result**: **OFW WILL NOT BOOT** (black screen)
 - **What will work**: CFW (Atmosphère), Semi-stock (Hekate nogc)
 - **What won't work**: Stock OFW
-- **Note**: Cannot downgrade below firmware version matching burnt fuse count
+- **Note**: This is very rare but can happen on some consoles.
 
 ### PERFECT MATCH
 - **Condition**: Burnt fuses = Required fuses
@@ -58,7 +58,7 @@ Nintendo uses a hardware anti-downgrade mechanism called "fuse burning." Each ma
 1. Download the latest zip from the [Releases](https://github.com/sthetix/FuseCheck/releases) page
 2. Extract the zip to the sd card
 3. Boot into Hekate
-5. Launch FuseCheck from the payloads menu
+5. Launch FuseCheck.bin from the payloads menu
 
 ## Usage
 
@@ -243,34 +243,22 @@ make
 ## Troubleshooting
 
 ### "Failed to derive keys!"
-- **Cause**: Unable to derive BIS keys from TSEC/Mariko
-- **Solution**: Ensure you're using a properly dumped firmware or try rebooting
+- **Cause**: Unable to derive BIS keys from TSEC/Mariko firmware
+- **What happens**: The payload automatically reboots the console
+- **Solution**: If this persists, your console may have eMMC corruption or hardware issues
 
 ### Firmware shows as "1.0.0"
-- **Cause**: NCA detection failed or database not found
-- **Solution**: Copy `fusecheck_db.txt` to `sd:/config/fusecheck_db.txt`
+- **Cause**: NCA detection failed (database not found, or SYSTEM partition couldn't be read)
+- **Solution**:
+  1. Copy `fusecheck_db.txt` to `sd:/config/fusecheck_db.txt`
+  2. Ensure your eMMC/SYSTEM partition is healthy and accessible
+  3. If using emuMMC, make sure it's properly configured
 
-### "Database file not found!" in Fuse List
+### "Database file not found!" in Fuse Database Viewer
 - **Cause**: Missing `fusecheck_db.txt` on SD card
-- **Solution**: Copy the database file to `sd:/config/` directory
+- **Solution**: Copy the database file from the release zip to `sd:/config/fusecheck_db.txt`
+- **Note**: Without the database, firmware version cannot be detected from NCA files and will default to 1.0.0, making fuse checking inaccurate
 
-### SYSTEM partition mount fails
-- **Cause**: BIS key 2 derivation failed
-- **Solution**: This is rare - try rebooting or check eMMC health
-
-## Comparison to Related Projects
-
-### vs Lockpick_RCM
-- **Same**: Key derivation engine, hardware initialization
-- **Different**: No key file dumping, focused on fuse checking only
-
-### vs fuse-check
-- **Same**: Fuse compatibility checking logic
-- **Different**: Complete implementation with UI, database, and auto-detection
-
-### vs TegraExplorer
-- **Same**: Horizontal UI layout style
-- **Different**: Single-purpose tool for fuse analysis
 
 ## Credits and Attribution
 
