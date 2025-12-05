@@ -55,10 +55,9 @@ Nintendo uses a hardware anti-downgrade mechanism called "fuse burning." Each ma
 
 ## Installation
 
-1. Download the latest `fusecheck.bin` from the [Releases](https://github.com/sthetix/FuseCheck/releases) page
-2. Copy `fusecheck.bin` to `sd:/bootloader/payloads/`
-3. (Optional) Download `fusecheck_db.txt` and copy to `sd:/config/fusecheck_db.txt`
-4. Boot into Hekate
+1. Download the latest zip from the [Releases](https://github.com/sthetix/FuseCheck/releases) page
+2. Extract the zip to the sd card
+3. Boot into Hekate
 5. Launch FuseCheck from the payloads menu
 
 ## Usage
