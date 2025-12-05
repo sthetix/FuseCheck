@@ -66,7 +66,7 @@ Nintendo uses a hardware anti-downgrade mechanism called "fuse burning." Each ma
 
 The main page displays:
 - **Firmware Version** - Auto-detected from SYSTEM partition
-- **Burnt Fuses** - Hardware fuse count (X / 32)
+- **Burnt Fuses** - Hardware fuse count from ODM6+ODM7 registers (X fuses burnt)
 - **Required Fuses** - Fuses needed for detected firmware
 - **Status** - Color-coded compatibility result
 - **Detailed Info** - What will/won't work based on fuse status
@@ -161,12 +161,14 @@ A sample database file is included in the repository at `fusecheck_db.txt`.
 
 1. **Hardware Initialization** - Initializes display, storage, and DRAM
 2. **Silent Key Derivation** - Derives BIS keys in RAM using Lockpick_RCM engine
-3. **Fuse Reading** - Reads ODM7 fuse register and counts burnt fuses
+3. **Fuse Reading** - Reads ODM6 and ODM7 fuse registers and counts all burnt fuses
 4. **SYSTEM Partition Access** - Mounts SYSTEM partition using BIS key 2
 5. **Firmware Detection** - Scans `/Contents/registered/` for SystemVersion NCA
 6. **Database Matching** - Matches NCA filename against external database
 7. **Compatibility Check** - Compares burnt fuses vs required fuses
 8. **Status Display** - Shows results in horizontal layout
+
+**Note:** The Switch has two anti-downgrade fuse registers (ODM6 and ODM7). FuseCheck reads both registers to provide complete fuse coverage. As of firmware 21.0.0+, Nintendo has burned up to 22 fuses, with plenty of capacity remaining for future firmware versions.
 
 ### Fuse-to-Firmware Mapping
 
