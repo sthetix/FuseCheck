@@ -750,7 +750,7 @@ void ipl_main() {
     while (true)
     {
         // Poll for touch events (non-blocking)
-        touch_event touch;
+        touch_event touch = {0};
         touch_poll(&touch);
 
         // Check for 3-finger touch screenshot
