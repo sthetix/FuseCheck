@@ -98,7 +98,7 @@ static const fw_fuse_map_t fuse_map[] = {
 
 
 // Unified database (NCA + Fuse Count) loaded from SD
-#define DATABASE_PATH "sd:/config/fusecheck/fusecheck_db.txt"
+#define DATABASE_PATH "sd:/config/FuseCheck/FuseCheck.db"
 #define MAX_NCA_ENTRIES 256
 #define MAX_FUSE_ENTRIES 64
 
@@ -653,9 +653,9 @@ static void show_fuse_info_page(int scroll_offset) {
         gfx_printf("Database file not found!");
         SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
         gfx_con_setpos(120, row_y + 40);
-        gfx_printf("Please copy fusecheck_db.txt to:");
+        gfx_printf("Please copy FuseCheck.db to:");
         gfx_con_setpos(120, row_y + 70);
-        gfx_printf("sd:/config/fusecheck/fusecheck_db.txt");
+        gfx_printf("sd:/config/FuseCheck/FuseCheck.db");
     }
 
     SETCOLOR(COLOR_RED, COLOR_DEFAULT);

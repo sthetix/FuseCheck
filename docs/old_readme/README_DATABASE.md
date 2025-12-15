@@ -8,7 +8,7 @@ Fusecheck now uses an external, easy-to-update database file instead of hardcode
 
 Copy the database file to your SD card at:
 ```
-sd:/config/fusecheck/fusecheck_db.txt
+sd:/config/FuseCheck/FuseCheck.db
 ```
 
 ## Database Format
@@ -56,7 +56,7 @@ Lines starting with `#` are treated as comments and ignored:
 
 ## Sample Database File
 
-A complete sample database file (`fusecheck_db.txt`) is included in the repository. Simply copy it to `sd:/config/fusecheck/fusecheck_db.txt` on your Switch's SD card.
+A complete sample database file (`FuseCheck.db`) is included in the repository. Simply copy it to `sd:/config/FuseCheck/FuseCheck.db` on your Switch's SD card.
 
 ## Updating the Database
 
@@ -64,7 +64,7 @@ When new Switch firmware is released:
 
 1. Update the `[FUSE]` section with new fuse count info from switchbrew
 2. Update the `[NCA]` section with the new SystemVersion NCA filename
-3. Copy the updated file to `sd:/config/fusecheck/fusecheck_db.txt`
+3. Copy the updated file to `sd:/config/FuseCheck/FuseCheck.db`
 4. No recompilation needed!
 
 ## Controls

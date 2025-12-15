@@ -97,7 +97,7 @@ FuseCheck uses an external database file for easy updates without recompilation.
 
 ### Database Location
 ```
-sd:/config/fusecheck/fusecheck_db.txt
+sd:/config/FuseCheck/FuseCheck.db
 ```
 
 ### Database Format
@@ -150,10 +150,10 @@ When new Switch firmware is released:
 
 1. Update the `[FUSE]` section with new fuse count from switchbrew
 2. Update the `[NCA]` section with the new SystemVersion NCA filename
-3. Copy the updated file to `sd:/config/fusecheck/fusecheck_db.txt`
+3. Copy the updated file to `sd:/config/FuseCheck/FuseCheck.db`
 4. **No recompilation needed!**
 
-A sample database file is included in the repository at `fusecheck_db.txt`.
+A sample database file is included in the repository at `FuseCheck.db`.
 
 ## How It Works
 
@@ -252,13 +252,13 @@ make
 ### Firmware shows as "1.0.0"
 - **Cause**: NCA detection failed (database not found, or SYSTEM partition couldn't be read)
 - **Solution**:
-  1. Copy `fusecheck_db.txt` to `sd:/config/fusecheck/fusecheck_db.txt`
+  1. Copy `FuseCheck.db` to `sd:/config/FuseCheck/FuseCheck.db`
   2. Ensure your eMMC/SYSTEM partition is healthy and accessible
   3. If using emuMMC, make sure it's properly configured
 
 ### "Database file not found!" in Fuse Database Viewer
-- **Cause**: Missing `fusecheck_db.txt` on SD card
-- **Solution**: Copy the database file from the release zip to `sd:/config/fusecheck/fusecheck_db.txt`
+- **Cause**: Missing `FuseCheck.db` on SD card
+- **Solution**: Copy the database file from the release zip to `sd:/config/FuseCheck/FuseCheck.db`
 - **Note**: Without the database, firmware version cannot be detected from NCA files and will default to 1.0.0, making fuse checking inaccurate
 
 
