@@ -1,5 +1,5 @@
 # Fusecheck Database Configuration v1
-# Copy to sd:/config/fusecheck/fusecheck.db to override built-in databases
+# Copy to sd:/config/fusecheck/fusecheck_db.txt to override built-in databases
 # Lines starting with # are comments and will be ignored
 
 # ===== FUSE COUNT DATABASE =====
