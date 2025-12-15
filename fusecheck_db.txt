@@ -1,5 +1,5 @@
 # Fusecheck Database Configuration v1
-# Copy to sd:/config/fusecheck_db.txt to override built-in databases
+# Copy to sd:/config/fusecheck/fusecheck_db.txt to override built-in databases
 # Lines starting with # are comments and will be ignored
 
 # ===== FUSE COUNT DATABASE =====
@@ -34,6 +34,7 @@
 # Source: SystemVersion Title ID 0100000000000809
 
 [NCA] 21.1.0 738da79326689ef4b72f702693bfc48a.nca
+[NCA] 21.0.1 e7273dd5b560d0ba282fc64206fecb56.nca
 [NCA] 21.0.0 4b0130c8b9d2174a6574f6247655acc0.nca
 [NCA] 20.5.0 23ce01f1fc55e55a783162d456e5ca58.nca
 [NCA] 20.4.0 c413a3965b7a3d4c9bfa5fb47a43dbcc.nca
@@ -85,6 +86,8 @@
 [NCA] 9.1.0 c5fbb49f2e3648c8cfca758020c53ecb.nca
 [NCA] 9.0.1 fd1ffb82dc1da76346343de22edbc97c.nca
 [NCA] 9.0.0 a6af05b33f8f903aab90c8b0fcbcc6a4.nca
+[NCA] 8.1.1 e9bb0602e939270a9348bddd9b78827b.nca
+[NCA] 8.1.1 724d9b432929ea43e787ad81bf09ae65.nca
 [NCA] 8.1.0 7eedb7006ad855ec567114be601b2a9d.nca
 [NCA] 8.0.1 6c5426d27c40288302ad616307867eba.nca
 [NCA] 8.0.0 4fe7b4abcea4a0bcc50975c1a926efcb.nca
@@ -94,6 +97,7 @@
 [NCA] 6.1.0 1d21680af5a034d626693674faf81b02.nca
 [NCA] 6.0.1 663e74e45ffc86fbbaeb98045feea315.nca
 [NCA] 6.0.0 258c1786b0f6844250f34d9c6f66095b.nca
+[NCA] 6.0.0 286e30bafd7e4197df6551ad802dd815.nca
 [NCA] 5.1.0 fce3b0ea366f9c95fe6498b69274b0e7.nca
 [NCA] 5.0.2 c5758b0cb8c6512e8967e38842d35016.nca
 [NCA] 5.0.1 7f5529b7a092b77bf093bdf2f9a3bf96.nca
