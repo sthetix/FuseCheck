@@ -400,12 +400,8 @@ bool parse_version_string(const char *version_str, u8 *major, u8 *minor, u8 *pat
 
 // Helper to write debug log
 void debug_log(const char *msg) {
-    FIL fp;
-    if (f_open(&fp, "sd:/fuse-check-debug.txt", FA_WRITE | FA_OPEN_APPEND) == FR_OK) {
-        f_puts(msg, &fp);
-        f_puts("\n", &fp);
-        f_close(&fp);
-    }
+    // Debug logging disabled - fuse-check-debug.txt will not be created
+    (void)msg;
 }
 
 // Detect firmware from SystemVersion NCA in SYSTEM partition
@@ -547,7 +543,7 @@ void show_fuse_check_horizontal(u8 burnt_fuses, u8 fw_major, u8 fw_minor, u8 fw_
     gfx_con_setpos(200, 350);
     if (burnt_fuses < required_fuses) {
         SETCOLOR(COLOR_RED, COLOR_DEFAULT);
-        gfx_puts("STATUS: CRITICAL ERROR");
+        gfx_puts("STATUS: FUSE MISMATCH");
 
         gfx_con_setpos(200, 400);
         SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
@@ -561,7 +557,7 @@ void show_fuse_check_horizontal(u8 burnt_fuses, u8 fw_major, u8 fw_minor, u8 fw_
         gfx_puts("What will work: CFW (Atmosphere), Semi-stock (Hekate nogc)");
     } else if (burnt_fuses > required_fuses) {
         SETCOLOR(COLOR_RED, COLOR_DEFAULT);
-        gfx_puts("STATUS: CRITICAL ERROR (OVERBURNT)");
+        gfx_puts("STATUS: FUSE MISMATCH (OVERBURNT)");
 
         gfx_con_setpos(200, 400);
         SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);

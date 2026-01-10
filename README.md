@@ -35,13 +35,13 @@ Nintendo uses a hardware anti-downgrade mechanism called "fuse burning." Each ma
 
 ## Status Indicators
 
-### CRITICAL ERROR
+### FUSE MISMATCH
 - **Condition**: Burnt fuses < Required fuses
 - **Result**: **OFW WILL NOT BOOT** (black screen)
 - **What will work**: CFW (Atmosphère), Semi-stock (Hekate nogc)
 - **What won't work**: Stock OFW
 
-### CRITICAL ERROR (OVERBURNT)
+### FUSE MISMATCH (OVERBURNT)
 - **Condition**: Burnt fuses > Required fuses
 - **Result**: **OFW WILL NOT BOOT** (black screen)
 - **What will work**: CFW (Atmosphère), Semi-stock (Hekate nogc)
