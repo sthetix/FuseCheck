@@ -62,7 +62,7 @@ TOOLS := $(TOOLSLZ) $(TOOLSB2C)
 
 ################################################################################
 
-.PHONY: all clean $(LDRDIR) $(TOOLS)
+.PHONY: all clean release $(LDRDIR) $(TOOLS)
 
 all: $(OUTPUTDIR)/$(TARGET).bin $(LDRDIR)
 	@echo "--------------------------------------"
@@ -81,6 +81,16 @@ all: $(OUTPUTDIR)/$(TARGET).bin $(LDRDIR)
 clean: $(TOOLS)
 	@rm -rf $(BUILDDIR)
 	@rm -rf $(OUTPUTDIR)
+	@rm -rf $(OUTPUTDIR)/$(TARGET)-*.zip
+
+release: all
+	@echo "Creating release zip..."
+	@rm -rf $(OUTPUTDIR)/zip_tmp
+	@mkdir -p $(OUTPUTDIR)/zip_tmp/bootloader/payloads
+	@cp $(OUTPUTDIR)/$(TARGET).bin $(OUTPUTDIR)/zip_tmp/bootloader/payloads/
+	@cd $(OUTPUTDIR)/zip_tmp && zip -r ../$(TARGET)-$(LPVERSION_MAJOR).$(LPVERSION_MINOR).$(LPVERSION_BUGFX).zip .
+	@rm -rf $(OUTPUTDIR)/zip_tmp
+	@echo "Release zip created: $(OUTPUTDIR)/$(TARGET)-$(LPVERSION_MAJOR).$(LPVERSION_MINOR).$(LPVERSION_BUGFX).zip"
 
 $(LDRDIR): $(OUTPUTDIR)/$(TARGET).bin
 	@$(TOOLSLZ)/lz77 $(OUTPUTDIR)/$(TARGET).bin
@@ -91,10 +101,10 @@ $(LDRDIR): $(OUTPUTDIR)/$(TARGET).bin
 	@$(TOOLSB2C)/bin2c payload_01 > $(LDRDIR)/payload_01.h
 	@rm payload_00
 	@rm payload_01
-	@$(MAKE) --no-print-directory -C $@ $(MAKECMDGOALS) -$(MAKEFLAGS) PAYLOAD_NAME=$(TARGET)
+	@$(MAKE) --no-print-directory -C $@ $(if $(filter release,$(MAKECMDGOALS)),all,$(MAKECMDGOALS)) -$(MAKEFLAGS) PAYLOAD_NAME=$(TARGET)
 
 $(TOOLS):
-	@$(MAKE) --no-print-directory -C $@ $(MAKECMDGOALS) -$(MAKEFLAGS)
+	@$(MAKE) --no-print-directory -C $@ $(if $(filter release,$(MAKECMDGOALS)),all,$(MAKECMDGOALS)) -$(MAKEFLAGS)
 
 $(OUTPUTDIR)/$(TARGET).bin: $(BUILDDIR)/$(TARGET)/$(TARGET).elf $(TOOLS)
 	@mkdir -p "$(@D)"

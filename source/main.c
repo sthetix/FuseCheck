@@ -591,7 +591,7 @@ void show_fuse_check_horizontal(u8 burnt_fuses, u8 fw_major, u8 fw_minor, u8 fw_
     // Adjust Y value: smaller = more left, larger = more right
     // Screen width in landscape is 1280, so center is around 640
     SETCOLOR(COLOR_RED, COLOR_DEFAULT);
-    print_centered(650, "VOL+:Fuse Map | VOL-:Back to Hekate | Power:Shutdown | 3-Finger:Screenshot");
+    print_centered(650, "VOL+:Fuse Map | Power:Back to Hekate | 3-Finger:Screenshot");
 }
 
 
@@ -798,7 +798,7 @@ void ipl_main() {
         bool vol_up = btn & BTN_VOL_UP;
         bool vol_dn = btn & BTN_VOL_DOWN;
 
-        // On main page: VOL+ toggles to info page, VOL- goes back to Hekate
+        // On main page: VOL+ toggles to info page
         if (!on_info_page)
         {
             if (vol_up)
@@ -808,9 +808,6 @@ void ipl_main() {
                 show_fuse_info_page(scroll_offset);
                 continue;
             }
-
-            if (vol_dn)
-                break; // Back to Hekate
         }
         // On info page: VOL+ scrolls down, VOL- scrolls up, Power goes back to main
         else
@@ -852,12 +849,9 @@ void ipl_main() {
             }
         }
 
-        // Power on main page: shutdown
+        // Power on main page: exit to Hekate
         if (!on_info_page && (btn & BTN_POWER))
-        {
-            power_set_state(POWER_OFF);
             break;
-        }
     }
 
     // Launch bootloader/update.bin instead of reboot
