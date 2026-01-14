@@ -1,13 +1,46 @@
-.vs
-.vscode
-build/*
-output/*
-research/*
+# Build outputs
+build/
+output/
+*.o
+*.elf
+*.bin
+*.zip
+
+# Temporary files
+*.tmp
+*~
+tmpclaude-*/
+.tmp_*/
+
+# IDE and Editor files
+.vs/
+.vscode/
+.idea/
+*.swp
+*.swo
+*#
+.DS_Store
+Thumbs.db
+
+# Generated files
 loader/payload_00.h
 loader/payload_01.h
-tools/bin2c/bin2c
 keygen/tsec_keygen.h
-tools/lz/lz77
-.claude
-releases/*
 
+# Research and testing
+research/
+releases/
+
+# OS specific
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Build tools (binaries, not source)
+tools/*/bin2c
+tools/*/lz77
+tools/*/*.exe
