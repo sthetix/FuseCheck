@@ -24,9 +24,15 @@ jobs:
 
       - name: Install devkitARM
         run: |
-          wget https://github.com/devkitPro/devkitPro-ci/releases/download/v1.0.0/devkitARM-cube.7z
-          7z x -y devkitARM-cube.7z -o/usr > /dev/null
+          # Install devkitPro pacman
+          wget https://github.com/devkitPro/pacman/releases/download/v1.0.1/devkitpro-pacman-installer-64bit.tar.gz
+          tar -xzf devkitpro-pacman-installer-64bit.tar.gz
+          ./devkitpro-pacman-installer-64bit.sh --directory /opt/devkitpro --no-menu
+          export DEVKITPRO=/opt/devkitpro
+          export DEVKITARM=${DEVKITPRO}/devkitARM
           echo "${DEVKITARM}/bin" >> $GITHUB_PATH
+          echo "DEVKITPRO=${DEVKITPRO}" >> $GITHUB_ENV
+          echo "DEVKITARM=${DEVKITARM}" >> $GITHUB_ENV
 
       - name: Set up Python
         uses: actions/setup-python@v5
