@@ -79,15 +79,18 @@ all: $(OUTPUTDIR)/$(TARGET).bin $(LDRDIR)
 	@echo "--------------------------------------"
 
 clean: $(TOOLS)
-	@rm -rf $(BUILDDIR)
-	@rm -rf $(OUTPUTDIR)
-	@rm -rf $(OUTPUTDIR)/$(TARGET)-*.zip
+	-@rm -rf $(BUILDDIR)
+	-@rm -rf $(OUTPUTDIR)/$(TARGET)-*.zip
+	-@rm -rf $(OUTPUTDIR)
+	@echo "Clean complete"
 
 release: all
 	@echo "Creating release zip..."
 	@rm -rf $(OUTPUTDIR)/zip_tmp
 	@mkdir -p $(OUTPUTDIR)/zip_tmp/bootloader/payloads
+	@mkdir -p $(OUTPUTDIR)/zip_tmp/config/fusecheck
 	@cp $(OUTPUTDIR)/$(TARGET).bin $(OUTPUTDIR)/zip_tmp/bootloader/payloads/
+	@cp fusecheck_db.txt $(OUTPUTDIR)/zip_tmp/config/fusecheck/
 	@cd $(OUTPUTDIR)/zip_tmp && zip -r ../$(TARGET)-$(LPVERSION_MAJOR).$(LPVERSION_MINOR).$(LPVERSION_BUGFX).zip .
 	@rm -rf $(OUTPUTDIR)/zip_tmp
 	@echo "Release zip created: $(OUTPUTDIR)/$(TARGET)-$(LPVERSION_MAJOR).$(LPVERSION_MINOR).$(LPVERSION_BUGFX).zip"

@@ -62,41 +62,6 @@ extern void pivot_stack(u32 stack_top);
 bool parse_version_string(const char *version_str, u8 *major, u8 *minor, u8 *patch);
 void debug_log(const char *msg);
 
-// Fuse-to-firmware mapping (from switchbrew.org/wiki/Fuses)
-typedef struct {
-    u8 major_min;
-    u8 minor_min;
-    u8 major_max;
-    u8 minor_max;
-    u8 fuses_required;
-} fw_fuse_map_t;
-
-static const fw_fuse_map_t fuse_map[] = {
-    {1, 0, 1, 0, 1},    // 1.0.0
-    {2, 0, 2, 3, 2},    // 2.0.0-2.3.0
-    {3, 0, 3, 0, 3},    // 3.0.0
-    {3, 1, 3, 2, 4},    // 3.0.1-3.0.2
-    {4, 0, 4, 1, 5},    // 4.0.0-4.1.0
-    {5, 0, 5, 1, 6},    // 5.0.0-5.1.0
-    {6, 0, 6, 1, 7},    // 6.0.0-6.1.0
-    {6, 2, 6, 2, 8},    // 6.2.0
-    {7, 0, 8, 1, 9},    // 7.0.0-8.0.1
-    {8, 1, 8, 1, 10},   // 8.1.0
-    {9, 0, 9, 1, 11},   // 9.0.0-9.0.1
-    {9, 1, 9, 2, 12},   // 9.1.0-9.2.0
-    {10, 0, 10, 2, 13}, // 10.0.0-10.2.0
-    {11, 0, 12, 1, 14}, // 11.0.0-12.0.1
-    {12, 2, 13, 1, 15}, // 12.0.2-13.1.0
-    {13, 2, 14, 1, 16}, // 13.2.1-14.1.2
-    {15, 0, 15, 1, 17}, // 15.0.0-15.0.1
-    {16, 0, 16, 1, 18}, // 16.0.0-16.1.0
-    {17, 0, 18, 1, 19}, // 17.0.0-18.1.0
-    {19, 0, 19, 1, 20}, // 19.0.0-19.0.1
-    {20, 0, 20, 5, 21}, // 20.0.0-20.5.0
-    {21, 0, 21, 1, 22}, // 21.0.0-21.0.1
-};
-
-
 // Unified database (NCA + Fuse Count) loaded from SD
 #define DATABASE_PATH "sd:/config/fusecheck/fusecheck_db.txt"
 #define MAX_NCA_ENTRIES 256
@@ -110,7 +75,6 @@ typedef struct {
 typedef struct {
     char version_range[32];
     u8 prod_fuses;
-    u8 dev_fuses;
 } fuse_count_entry_t;
 
 static nca_entry_t nca_db[MAX_NCA_ENTRIES];
@@ -212,19 +176,10 @@ static void load_database(void) {
                 prod_fuses = prod_fuses * 10 + (*p - '0');
                 p++;
             }
-            while (*p && isspace((unsigned char)*p)) p++;
 
-            // Parse dev fuses
-            int dev_fuses = 0;
-            while (*p >= '0' && *p <= '9') {
-                dev_fuses = dev_fuses * 10 + (*p - '0');
-                p++;
-            }
-
-            if (version_range[0] && prod_fuses >= 0 && prod_fuses <= 255 && dev_fuses >= 0 && dev_fuses <= 255) {
+            if (version_range[0] && prod_fuses >= 0 && prod_fuses <= 255) {
                 strncpy(fuse_db[fuse_db_count].version_range, version_range, sizeof(fuse_db[fuse_db_count].version_range) - 1);
                 fuse_db[fuse_db_count].prod_fuses = (u8)prod_fuses;
-                fuse_db[fuse_db_count].dev_fuses = (u8)dev_fuses;
                 fuse_db_count++;
             }
         }
@@ -347,16 +302,57 @@ u8 get_burnt_fuses() {
     return fuse_count;
 }
 
-u8 get_required_fuses(u8 major, u8 minor) {
-    for (int i = 0; i < sizeof(fuse_map) / sizeof(fw_fuse_map_t); i++) {
-        if (major >= fuse_map[i].major_min && major <= fuse_map[i].major_max) {
-            if (major > fuse_map[i].major_min || minor >= fuse_map[i].minor_min) {
-                if (major < fuse_map[i].major_max || minor <= fuse_map[i].minor_max) {
-                    return fuse_map[i].fuses_required;
-                }
-            }
+// Helper to compare versions: returns -1 if v1 < v2, 0 if equal, 1 if v1 > v2
+static int compare_versions(u8 maj1, u8 min1, u8 pat1, u8 maj2, u8 min2, u8 pat2) {
+    if (maj1 != maj2) return (maj1 < maj2) ? -1 : 1;
+    if (min1 != min2) return (min1 < min2) ? -1 : 1;
+    if (pat1 != pat2) return (pat1 < pat2) ? -1 : 1;
+    return 0;
+}
+
+// Check if a version falls within a version range string (e.g., "21.0.0-21.2.0" or "21.2.0")
+static bool version_in_range(u8 maj, u8 min, u8 pat, const char *range_str) {
+    char range_copy[64];
+    strncpy(range_copy, range_str, sizeof(range_copy) - 1);
+    range_copy[sizeof(range_copy) - 1] = '\0';
+
+    // Check if it's a range (contains '-')
+    char *dash = strchr(range_copy, '-');
+    if (dash) {
+        // Parse range: "start-end"
+        *dash = '\0';
+        char *start = range_copy;
+        char *end = dash + 1;
+
+        u8 start_maj, start_min, start_pat;
+        u8 end_maj, end_min, end_pat;
+
+        if (!parse_version_string(start, &start_maj, &start_min, &start_pat))
+            return false;
+        if (!parse_version_string(end, &end_maj, &end_min, &end_pat))
+            return false;
+
+        // Check if version is within [start, end]
+        return (compare_versions(maj, min, pat, start_maj, start_min, start_pat) >= 0 &&
+                compare_versions(maj, min, pat, end_maj, end_min, end_pat) <= 0);
+    } else {
+        // Single version - must match exactly
+        u8 range_maj, range_min, range_pat;
+        if (!parse_version_string(range_copy, &range_maj, &range_min, &range_pat))
+            return false;
+        return (maj == range_maj && min == range_min && pat == range_pat);
+    }
+}
+
+u8 get_required_fuses(u8 major, u8 minor, u8 patch) {
+    // Try to find matching version in external database
+    for (int i = 0; i < fuse_db_count; i++) {
+        if (version_in_range(major, minor, patch, fuse_db[i].version_range)) {
+            return fuse_db[i].prod_fuses;
         }
     }
+
+    // Fallback: return 1 if database not loaded or version not found
     return 1;
 }
 
@@ -607,9 +603,7 @@ static void show_fuse_info_page(int scroll_offset) {
     gfx_con_setpos(120, 160);
     gfx_printf("System Version");
     gfx_con_setpos(620, 160);
-    gfx_printf("Prod Fuses");
-    gfx_con_setpos(860, 160);
-    gfx_printf("Dev Fuses");
+    gfx_printf("Fuses");
 
     // Try loading database (once)
     load_database();
@@ -630,10 +624,6 @@ static void show_fuse_info_page(int scroll_offset) {
             gfx_con_setpos(640, row_y);
             SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
             gfx_printf("%2d", fuse_db[i].prod_fuses);
-
-            gfx_con_setpos(880, row_y);
-            SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
-            gfx_printf("%2d", fuse_db[i].dev_fuses);
         }
 
         // Show scroll indicator if there are more entries
@@ -728,7 +718,7 @@ void ipl_main() {
     }
 
     // Calculate required fuses
-    u8 required_fuses = get_required_fuses(fw_major, fw_minor);
+    u8 required_fuses = get_required_fuses(fw_major, fw_minor, fw_patch);
 
     // Initialize touchscreen for 3-finger screenshot support
     touch_power_on();
