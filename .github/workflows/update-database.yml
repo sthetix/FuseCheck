@@ -24,10 +24,8 @@ jobs:
 
       - name: Install devkitARM
         run: |
-          # Install devkitPro pacman
-          wget https://github.com/devkitPro/pacman/releases/download/v1.0.1/devkitpro-pacman-installer-64bit.tar.gz
-          tar -xzf devkitpro-pacman-installer-64bit.tar.gz
-          ./devkitpro-pacman-installer-64bit.sh --directory /opt/devkitpro --no-menu
+          # Add devkitPro apt repository
+          wget -O - https://apt.devkitpro.org/install-devkitpro-pacman.sh | bash
           export DEVKITPRO=/opt/devkitpro
           export DEVKITARM=${DEVKITPRO}/devkitARM
           echo "${DEVKITARM}/bin" >> $GITHUB_PATH
