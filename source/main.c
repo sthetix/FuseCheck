@@ -84,6 +84,7 @@ static fuse_count_entry_t fuse_db[MAX_FUSE_ENTRIES];
 static size_t fuse_db_count = 0;
 
 static bool database_loaded = false;
+static bool database_file_loaded = false;  // Track if DB file was actually loaded from SD
 
 static bool str_ends_with(const char *s, const char *suffix) {
     if (!s || !suffix) return false;
@@ -107,12 +108,14 @@ static void load_database(void) {
         return;
 
     database_loaded = true;
+    database_file_loaded = false;  // Reset flag
 
     FIL fp;
     if (f_open(&fp, DATABASE_PATH, FA_READ) != FR_OK) {
         debug_log("DB: file not found, using built-in data");
         return;
     }
+    database_file_loaded = true;  // File successfully opened
 
     char line[128];
     while (f_gets(line, sizeof(line), &fp)) {
@@ -514,30 +517,67 @@ void show_fuse_check_horizontal(u8 burnt_fuses, u8 fw_major, u8 fw_minor, u8 fw_
 
     // Title
     SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
-    print_centered(40, "NINTENDO SWITCH FUSE CHECKER 1.0.0");
+    print_centered(40, "NINTENDO SWITCH FUSE CHECKER 1.0.1");
 
-    // System Information - single line
-    gfx_con_setpos(200, 150);
-    SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
-    gfx_printf("Firmware: ");
-    SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
-    gfx_printf("%2d.%d.%d", fw_major, fw_minor, fw_patch);
+    // Show database missing warning if applicable
+    if (!database_file_loaded) {
+        gfx_con_setpos(200, 120);
+        SETCOLOR(COLOR_RED, COLOR_DEFAULT);
+        gfx_printf("WARNING: fusecheck_db.txt NOT FOUND!");
+        gfx_con_setpos(200, 150);
+        SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
+        gfx_printf("Please copy config folder to SD card");
 
-    gfx_con_setpos(200, 200);
-    SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
-    gfx_printf("Burnt Fuses: ");
-    SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
-    gfx_printf("%2d", burnt_fuses);
+        // Don't show firmware info if database is missing
+        gfx_con_setpos(200, 220);
+        SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
+        gfx_printf("Burnt Fuses: ");
+        SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
+        gfx_printf("%2d", burnt_fuses);
 
-    gfx_con_setpos(200, 250);
-    SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
-    gfx_printf("Required Fuses: ");
-    SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
-    gfx_printf("%2d", required_fuses);
+        gfx_con_setpos(200, 270);
+        SETCOLOR(COLOR_RED, COLOR_DEFAULT);
+        gfx_puts("Cannot verify fuse compatibility without database!");
+
+        gfx_con_setpos(200, 320);
+        SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
+        gfx_puts("Required file: sd:/config/fusecheck/fusecheck_db.txt");
+    } else {
+        // System Information - single line
+        gfx_con_setpos(200, 150);
+        SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
+        gfx_printf("Firmware: ");
+        SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
+        gfx_printf("%2d.%d.%d", fw_major, fw_minor, fw_patch);
+
+        gfx_con_setpos(200, 200);
+        SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
+        gfx_printf("Burnt Fuses: ");
+        SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
+        gfx_printf("%2d", burnt_fuses);
+
+        gfx_con_setpos(200, 250);
+        SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
+        gfx_printf("Required Fuses: ");
+        SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
+        gfx_printf("%2d", required_fuses);
+    }
 
     // Status - large and clear
     gfx_con_setpos(200, 350);
-    if (burnt_fuses < required_fuses) {
+    if (!database_file_loaded) {
+        // Database missing - cannot determine fuse status
+        SETCOLOR(COLOR_YELLOW, COLOR_DEFAULT);
+        gfx_puts("STATUS: DATABASE MISSING");
+
+        gfx_con_setpos(200, 400);
+        SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
+        gfx_puts("Copy config folder from release archive to SD card");
+
+        gfx_con_setpos(200, 450);
+        SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
+        gfx_puts("Path: sd:/config/fusecheck/");
+    } else if (burnt_fuses < required_fuses) {
         SETCOLOR(COLOR_RED, COLOR_DEFAULT);
         gfx_puts("STATUS: FUSE MISMATCH");
 
@@ -587,7 +627,7 @@ void show_fuse_check_horizontal(u8 burnt_fuses, u8 fw_major, u8 fw_minor, u8 fw_
     // Adjust Y value: smaller = more left, larger = more right
     // Screen width in landscape is 1280, so center is around 640
     SETCOLOR(COLOR_RED, COLOR_DEFAULT);
-    print_centered(650, "VOL+:Fuse Map | Power:Back to Hekate | 3-Finger:Screenshot");
+    print_centered(650, "VOL+:Fuse Map | Power:Back | 3-Finger:Screenshot");
 }
 
 

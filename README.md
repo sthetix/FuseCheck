@@ -8,6 +8,12 @@ A Nintendo Switch payload that checks your console's burnt fuse count against th
 
 > **Based on:** [Lockpick_RCM_Pro](https://github.com/sthetix/Lockpick_RCM_Pro), with fuse checking logic inspired by the fuse-check project and UI design from [TegraExplorer](https://github.com/suchmememanyskill/TegraExplorer) and NCA Database checking from [NxNandManager](https://github.com/eliboa/NxNandManager)
 
+## Release Notes
+
+### Version 1.0.1
+- **Added warning when `fusecheck_db.txt` is missing** - Shows clear error message instead of displaying misleading firmware version 1.0.0
+- **Improved user feedback** - Users are now properly informed when the config folder is missing from SD card
+
 ## What is FuseCheck?
 
 FuseCheck is a bare-metal payload that helps you understand if your Nintendo Switch will boot into Official Firmware (OFW) based on your current fuse count and installed firmware version. This is critical for users who have been using CFW and want to know if they can safely boot into stock firmware.
@@ -73,8 +79,7 @@ The main page displays:
 
 **Controls:**
 - **VOL+** - View Fuse Database (all firmware versions)
-- **VOL-** - Return to Hekate
-- **Power** - Shutdown console
+- **Power** - Return to Hekate
 - **3-Finger Touch** - Take screenshot
 
 ### Fuse Database Page
@@ -249,17 +254,15 @@ make
 - **What happens**: The payload automatically reboots the console
 - **Solution**: If this persists, your console may have eMMC corruption or hardware issues
 
-### Firmware shows as "1.0.0"
-- **Cause**: NCA detection failed (database not found, or SYSTEM partition couldn't be read)
-- **Solution**:
-  1. Copy `fusecheck_db.txt` to `sd:/config/fusecheck/fusecheck_db.txt`
-  2. Ensure your eMMC/SYSTEM partition is healthy and accessible
-  3. If using emuMMC, make sure it's properly configured
+### "WARNING: fusecheck_db.txt NOT FOUND!" on main screen
+- **Cause**: The config folder with `fusecheck_db.txt` was not copied to the SD card
+- **What happens**: Cannot detect firmware version or verify fuse compatibility
+- **Solution**: Copy the `config` folder from the release archive to your SD card root
+  - The path should be: `sd:/config/fusecheck/fusecheck_db.txt`
 
 ### "Database file not found!" in Fuse Database Viewer
 - **Cause**: Missing `fusecheck_db.txt` on SD card
 - **Solution**: Copy the database file from the release zip to `sd:/config/fusecheck/fusecheck_db.txt`
-- **Note**: Without the database, firmware version cannot be detected from NCA files and will default to 1.0.0, making fuse checking inaccurate
 
 
 ## Credits and Attribution
