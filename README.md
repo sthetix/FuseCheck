@@ -8,12 +8,6 @@ A Nintendo Switch payload that checks your console's burnt fuse count against th
 
 > **Based on:** [Lockpick_RCM_Pro](https://github.com/sthetix/Lockpick_RCM_Pro), with fuse checking logic inspired by the fuse-check project and UI design from [TegraExplorer](https://github.com/suchmememanyskill/TegraExplorer) and NCA Database checking from [NxNandManager](https://github.com/eliboa/NxNandManager)
 
-## Release Notes
-
-### Version 1.0.1
-- **Added warning when `fusecheck_db.txt` is missing** - Shows clear error message instead of displaying misleading firmware version 1.0.0
-- **Improved user feedback** - Users are now properly informed when the config folder is missing from SD card
-
 ## What is FuseCheck?
 
 FuseCheck is a bare-metal payload that helps you understand if your Nintendo Switch will boot into Official Firmware (OFW) based on your current fuse count and installed firmware version. This is critical for users who have been using CFW and want to know if they can safely boot into stock firmware.
