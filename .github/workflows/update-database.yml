@@ -1,4 +1,4 @@
-name: Auto-Update Database and Release
+name: Auto-Update Database
 
 on:
   schedule:
@@ -7,30 +7,19 @@ on:
   workflow_dispatch:  # Allow manual trigger
   push:
     paths:
-      - '.github/workflows/update-database.yml'
       - 'scripts/update_db.py'
-      - 'Makefile'
 
 jobs:
-  auto-update:
+  update-db:
     runs-on: ubuntu-latest
 
     permissions:
       contents: write
+      contents-read: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Install devkitARM
-        run: |
-          # Add devkitPro apt repository
-          wget -O - https://apt.devkitpro.org/install-devkitpro-pacman.sh | bash
-          export DEVKITPRO=/opt/devkitpro
-          export DEVKITARM=${DEVKITPRO}/devkitARM
-          echo "${DEVKITARM}/bin" >> $GITHUB_PATH
-          echo "DEVKITPRO=${DEVKITPRO}" >> $GITHUB_ENV
-          echo "DEVKITARM=${DEVKITARM}" >> $GITHUB_ENV
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -40,7 +29,6 @@ jobs:
       - name: Fetch latest firmware info from FuseNCA
         id: fetch_firmware
         run: |
-          # Get latest version from FuseNCA
           curl -s "https://raw.githubusercontent.com/sthetix/FuseNCA/master/fuses.json" | \
             python3 -c "import sys, json; data=json.load(sys.stdin); versions=[v['version'] for v in data['data']]; print('latest_fw=' + max(versions, key=lambda v: tuple(map(int, v.split('.')))))" >> $GITHUB_OUTPUT
 
@@ -60,21 +48,52 @@ jobs:
             echo "Latest firmware: ${{ steps.fetch_firmware.outputs.latest_fw }}"
           fi
 
-      - name: Build FuseCheck
-        if: steps.check_changes.outputs.changed == 'true'
-        run: |
-          make release
-
-      - name: Update Release (keep v1.0.0, update firmware info)
+      - name: Update release zip
         if: steps.check_changes.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          ZIP_FILE=$(ls output/FuseCheck-*.zip | head -1)
+          # Download existing release zip
+          gh release download v1.0.1 --dir output_download --pattern 'FuseCheck-*.zip'
 
-          # Create release notes with latest firmware info
+          if [ -f "output_download/FuseCheck-1.0.1.zip" ]; then
+            echo "Updating existing v1.0.1 zip..."
+            ZIP_FILE="output_download/FuseCheck-1.0.1.zip"
+          else
+            echo "No existing zip found, using placeholder"
+            ZIP_FILE=""
+          fi
+
+          # Create updated zip
+          rm -rf zip_tmp
+          mkdir -p zip_tmp/bootloader/payloads
+          mkdir -p zip_tmp/config/fusecheck
+
+          if [ -n "$ZIP_FILE" ] && [ -f "$ZIP_FILE" ]; then
+            # Extract existing zip
+            unzip -q "$ZIP_FILE" -d zip_tmp
+          fi
+
+          # Update with new database
+          cp fusecheck_db.txt zip_tmp/config/fusecheck/
+
+          # Rezip
+          cd zip_tmp && zip -r ../FuseCheck-1.0.1.zip . && cd ..
+
+          echo "Zip created: $(ls -lh FuseCheck-1.0.1.zip)"
+          rm -rf output_download zip_tmp
+
+      - name: Update release
+        if: steps.check_changes.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Create release notes
+          DATE="$(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+          COUNT=$(grep -c "^\[NCA\]" fusecheck_db.txt || echo "0")
+
           cat > release_notes.md << 'EOF'
-          # FuseCheck v1.0.0
+          # FuseCheck v1.0.1
 
           **Latest supported firmware: {LATEST_FW}**
 
@@ -82,7 +101,7 @@ jobs:
           A Nintendo Switch fuse checker that detects your firmware version and burnt fuses to determine if your system can boot OFW safely.
 
           ## Installation
-          1. Download `FuseCheck-1.0.0.zip`
+          1. Download `FuseCheck-1.0.1.zip`
           2. Extract to your SD card
           3. Run via Hekate payload
 
@@ -103,32 +122,26 @@ jobs:
           EOF
 
           # Replace placeholders
-          LATEST_FW="${{ steps.fetch_firmware.outputs.latest_fw }}"
-          DATE="$(date -u +"%Y-%m-%d %H:%M:%S UTC")"
-          COUNT=$(grep -c "^\[NCA\]" fusecheck_db.txt || echo "0")
-
-          sed -i "s/{LATEST_FW}/$LATEST_FW/g" release_notes.md
+          sed -i "s/{LATEST_FW}/${{ steps.fetch_firmware.outputs.latest_fw }}/g" release_notes.md
           sed -i "s/{DATE}/$DATE/g" release_notes.md
           sed -i "s/{COUNT}/$COUNT/g" release_notes.md
 
-          # Update existing release (tag: v1.0.0)
-          gh release edit v1.0.0 \
+          # Update existing release
+          gh release edit v1.0.1 \
             --notes-file release_notes.md \
-            --title "FuseCheck v1.0.0 (FW $LATEST_FW)" 2>/dev/null || \
-          gh release create v1.0.0 \
-            --title "FuseCheck v1.0.0 (FW $LATEST_FW)" \
+            --title "FuseCheck v1.0.1 (FW ${{ steps.fetch_firmware.outputs.latest_fw }})" 2>/dev/null || \
+          gh release create v1.0.1 \
+            --title "FuseCheck v1.0.1 (FW ${{ steps.fetch_firmware.outputs.latest_fw }})" \
             --notes-file release_notes.md \
             --latest
 
           # Delete old zip asset if exists and upload new one
-          ASSET_ID=$(gh release view v1.0.0 --json assets -q '.assets[].[] | select(.name | startswith("FuseCheck-")) | .id')
+          ASSET_ID=$(gh release view v1.0.1 --json assets -q '.assets[].[] | select(.name | startswith("FuseCheck-")) | .id')
           if [ -n "$ASSET_ID" ]; then
-            echo "Deleting old asset: $ASSET_ID"
-            gh release delete-asset v1.0.0 $ASSET_ID --yes
+            gh release delete-asset v1.0.1 $ASSET_ID --yes
           fi
 
-          # Upload new zip
-          gh release upload v1.0.0 "$ZIP_FILE"
+          gh release upload v1.0.1 "FuseCheck-1.0.1.zip"
 
       - name: Commit database changes
         if: steps.check_changes.outputs.changed == 'true'
