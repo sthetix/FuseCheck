@@ -135,10 +135,10 @@ jobs:
             --latest
 
           # Delete old zip asset if exists and upload new one
-          ASSET_ID=$(gh release view v1.0.1 --json assets -q '.assets[] | select(.name | startswith("FuseCheck-")) | .id')
-          if [ -n "$ASSET_ID" ]; then
-            gh release delete-asset v1.0.1 $ASSET_ID --yes
-          fi
+          for ASSET_URL in $(gh api repos/${{ github.repository }}/releases/tags/v1.0.1 --jq '.assets[] | select(.name | startswith("FuseCheck-")) | .url'); do
+            gh api -X DELETE "$ASSET_URL"
+            echo "Deleted asset: $ASSET_URL"
+          done
 
           gh release upload v1.0.1 "FuseCheck-1.0.1.zip"
 
