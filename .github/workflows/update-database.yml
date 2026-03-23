@@ -15,7 +15,6 @@ jobs:
 
     permissions:
       contents: write
-      contents-read: write
 
     steps:
       - name: Checkout repository
