@@ -1,0 +1,106 @@
+name: Post Release to X
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag to post about'
+        required: true
+      release_title:
+        description: 'Release title'
+        required: true
+      release_notes:
+        description: 'Release notes'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  post-to-x:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post to X
+        run: |
+          echo "Posting to X.com..."
+
+          pip install requests-oauthlib --quiet
+
+          python3 << 'EOF'
+          import os
+          import re
+          from requests_oauthlib import OAuth1Session
+
+          notes = os.environ['NOTES']
+          title = os.environ['TITLE']
+          url = os.environ['URL']
+          repo = os.environ['REPO']
+
+          # Derive a short project name from "owner/repo"
+          project_name = repo.split('/')[-1]
+
+          def extract_bullets(notes, max_items=3):
+              """Extract bullet points from any markdown release notes."""
+              lines = notes.splitlines()
+              bullets = []
+              for line in lines:
+                  stripped = line.strip()
+                  if stripped.startswith(('- ', '* ', '• ')):
+                      text = stripped[2:].strip()
+                      # Remove inline code backticks for cleaner tweet
+                      text = re.sub(r'`([^`]+)`', r'\1', text)
+                      if text:
+                          bullets.append(text)
+                  if len(bullets) >= max_items:
+                      break
+              return bullets
+
+          bullets = extract_bullets(notes)
+
+          tweet_lines = [f"{project_name} {title} is out!"]
+
+          if bullets:
+              formatted = "\n".join(f"• {b}" for b in bullets)
+              tweet_lines.append(formatted)
+
+          tweet_lines.append(f"Release: {url}")
+
+          tweet_text = "\n\n".join(tweet_lines)
+
+          api_key = os.environ['X_API_KEY']
+          api_secret = os.environ['X_API_KEY_SECRET']
+          access_token = os.environ['X_ACCESS_TOKEN']
+          access_secret = os.environ['X_ACCESS_TOKEN_SECRET']
+
+          oauth = OAuth1Session(
+              client_key=api_key,
+              client_secret=api_secret,
+              resource_owner_key=access_token,
+              resource_owner_secret=access_secret
+          )
+
+          response = oauth.post(
+              "https://api.twitter.com/2/tweets",
+              json={"text": tweet_text}
+          )
+
+          if response.status_code != 201:
+              print(f"Error: {response.status_code}")
+              print(response.text)
+              exit(1)
+
+          print("Tweet posted successfully!")
+          print(f"Tweet: {tweet_text}")
+          print(f"Tweet URL: https://x.com/user/status/{response.json()['data']['id']}")
+          EOF
+        env:
+          REPO: ${{ github.repository }}
+          NOTES: ${{ inputs.release_notes || github.event.release.body }}
+          TITLE: ${{ inputs.release_title || github.event.release.name }}
+          URL: https://github.com/${{ github.repository }}/releases/tag/${{ inputs.release_tag || github.event.release.tag_name }}
+          X_API_KEY: ${{ secrets.X_API_KEY }}
+          X_API_KEY_SECRET: ${{ secrets.X_API_KEY_SECRET }}
+          X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
+          X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
