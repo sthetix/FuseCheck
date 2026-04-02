@@ -44,3 +44,4 @@ Thumbs.db
 tools/*/bin2c
 tools/*/lz77
 tools/*/*.exe
+RELEASE_NOTES.md
