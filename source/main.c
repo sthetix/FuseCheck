@@ -512,12 +512,12 @@ void print_centered(int y, const char *text) {
     gfx_puts(text);
 }
 
-void show_fuse_check_horizontal(u8 burnt_fuses, u8 fw_major, u8 fw_minor, u8 fw_patch, u8 required_fuses) {
+void show_fuse_check_horizontal(u8 burnt_fuses, u8 fw_major, u8 fw_minor, u8 fw_patch, u8 required_fuses, bool fw_detected) {
     gfx_clear_grey(0x1B);
 
     // Title
     SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
-    print_centered(40, "NINTENDO SWITCH FUSE CHECKER 1.0.1");
+    print_centered(40, "NINTENDO SWITCH FUSE CHECKER 1.0.2");
 
     // Show database missing warning if applicable
     if (!database_file_loaded) {
@@ -548,7 +548,10 @@ void show_fuse_check_horizontal(u8 burnt_fuses, u8 fw_major, u8 fw_minor, u8 fw_
         SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
         gfx_printf("Firmware: ");
         SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
-        gfx_printf("%2d.%d.%d", fw_major, fw_minor, fw_patch);
+        if (fw_detected)
+            gfx_printf("%d.%d.%d", fw_major, fw_minor, fw_patch);
+        else
+            gfx_puts("N/A");
 
         gfx_con_setpos(200, 200);
         SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
@@ -560,7 +563,10 @@ void show_fuse_check_horizontal(u8 burnt_fuses, u8 fw_major, u8 fw_minor, u8 fw_
         SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
         gfx_printf("Required Fuses: ");
         SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
-        gfx_printf("%2d", required_fuses);
+        if (fw_detected)
+            gfx_printf("%2d", required_fuses);
+        else
+            gfx_puts("N/A");
     }
 
     // Status - large and clear
@@ -577,6 +583,22 @@ void show_fuse_check_horizontal(u8 burnt_fuses, u8 fw_major, u8 fw_minor, u8 fw_
         gfx_con_setpos(200, 450);
         SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
         gfx_puts("Path: sd:/config/fusecheck/");
+    } else if (!fw_detected) {
+        // DB loaded but firmware NCA not found - likely newer FW not yet in DB
+        SETCOLOR(COLOR_YELLOW, COLOR_DEFAULT);
+        gfx_puts("STATUS: FIRMWARE NOT DETECTED");
+
+        gfx_con_setpos(200, 400);
+        SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
+        gfx_puts("Your firmware is not in the database.");
+
+        gfx_con_setpos(200, 450);
+        SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
+        gfx_puts("Please check for an updated build at:");
+
+        gfx_con_setpos(200, 500);
+        SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
+        gfx_puts("github.com/sthetix/FuseCheck");
     } else if (burnt_fuses < required_fuses) {
         SETCOLOR(COLOR_RED, COLOR_DEFAULT);
         gfx_puts("STATUS: FUSE MISMATCH");
@@ -750,12 +772,7 @@ void ipl_main() {
         emummc_storage_end();
     }
 
-    if (!fw_detected) {
-        // Default to a safe version if detection completely fails
-        fw_major = 1;
-        fw_minor = 0;
-        fw_patch = 0;
-    }
+    // fw_major/fw_minor/fw_patch remain 0 if not detected; fw_detected gates display
 
     // Calculate required fuses
     u8 required_fuses = get_required_fuses(fw_major, fw_minor, fw_patch);
@@ -764,7 +781,7 @@ void ipl_main() {
     touch_power_on();
 
     // Show results in horizontal layout (single page)
-    show_fuse_check_horizontal(burnt_fuses, fw_major, fw_minor, fw_patch, required_fuses);
+    show_fuse_check_horizontal(burnt_fuses, fw_major, fw_minor, fw_patch, required_fuses, fw_detected);
 
     // Wait for button to exit, support info page, scrolling, and screenshot combo
     bool on_info_page = false;
@@ -800,7 +817,7 @@ void ipl_main() {
             if (on_info_page)
                 show_fuse_info_page(scroll_offset);
             else
-                show_fuse_check_horizontal(burnt_fuses, fw_major, fw_minor, fw_patch, required_fuses);
+                show_fuse_check_horizontal(burnt_fuses, fw_major, fw_minor, fw_patch, required_fuses, fw_detected);
 
             btn_last = btn_read();
             continue;
@@ -874,7 +891,7 @@ void ipl_main() {
             if (btn & BTN_POWER)
             {
                 on_info_page = false;
-                show_fuse_check_horizontal(burnt_fuses, fw_major, fw_minor, fw_patch, required_fuses);
+                show_fuse_check_horizontal(burnt_fuses, fw_major, fw_minor, fw_patch, required_fuses, fw_detected);
                 continue;
             }
         }
