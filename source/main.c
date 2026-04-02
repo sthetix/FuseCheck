@@ -30,6 +30,7 @@
 #include <utils/list.h>
 #include <utils/sprintf.h>
 #include "keys/keys.h"
+#include "keys/cal0_read.h"
 #include <sec/se.h>
 #include "frontend/gui.h"
 #include <input/touch.h>
@@ -210,8 +211,6 @@ static void load_database(void) {
 static void *coreboot_addr;
 static char *payload_path = NULL;
 
-// Forward declaration
-extern int nx_emmc_bis_init(emmc_part_t *part);
 
 void reloc_patcher(u32 payload_dst, u32 payload_src, u32 payload_size) {
     memcpy((u8 *)payload_src, (u8 *)IPL_LOAD_ADDR, PATCHED_RELOC_SZ);
@@ -512,39 +511,62 @@ void print_centered(int y, const char *text) {
     gfx_puts(text);
 }
 
-void show_fuse_check_horizontal(u8 burnt_fuses, u8 fw_major, u8 fw_minor, u8 fw_patch, u8 required_fuses, bool fw_detected) {
+static const char *get_console_name(u32 hw_type) {
+    switch (hw_type) {
+    case FUSE_NX_HW_TYPE_ICOSA: return "Erista - Icosa (V1)";
+    case FUSE_NX_HW_TYPE_IOWA:  return "Mariko - Iowa (V2)";
+    case FUSE_NX_HW_TYPE_HOAG:  return "Mariko - Hoag (Lite)";
+    case FUSE_NX_HW_TYPE_AULA:  return "Mariko - Aula (OLED)";
+    default:                    return "Unknown";
+    }
+}
+
+void show_fuse_check_horizontal(u8 burnt_fuses, u8 fw_major, u8 fw_minor, u8 fw_patch, u8 required_fuses, bool fw_detected, const char *serial, u32 hw_type) {
     gfx_clear_grey(0x1B);
 
     // Title
     SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
     print_centered(40, "NINTENDO SWITCH FUSE CHECKER 1.0.2");
 
+    // Serial Number (left) and Console Type (right) - always shown
+    gfx_con_setpos(200, 120);
+    SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
+    gfx_printf("Serial: ");
+    SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
+    gfx_puts(serial[0] ? serial : "N/A");
+
+    gfx_con_setpos(700, 120);
+    SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
+    gfx_printf("Console: ");
+    SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
+    gfx_puts(get_console_name(hw_type));
+
     // Show database missing warning if applicable
     if (!database_file_loaded) {
-        gfx_con_setpos(200, 120);
+        gfx_con_setpos(200, 150);
         SETCOLOR(COLOR_RED, COLOR_DEFAULT);
         gfx_printf("WARNING: fusecheck_db.txt NOT FOUND!");
-        gfx_con_setpos(200, 150);
+        gfx_con_setpos(200, 180);
         SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
         gfx_printf("Please copy config folder to SD card");
 
         // Don't show firmware info if database is missing
-        gfx_con_setpos(200, 220);
+        gfx_con_setpos(200, 250);
         SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
         gfx_printf("Burnt Fuses: ");
         SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
         gfx_printf("%2d", burnt_fuses);
 
-        gfx_con_setpos(200, 270);
+        gfx_con_setpos(200, 300);
         SETCOLOR(COLOR_RED, COLOR_DEFAULT);
         gfx_puts("Cannot verify fuse compatibility without database!");
 
-        gfx_con_setpos(200, 320);
+        gfx_con_setpos(200, 350);
         SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
         gfx_puts("Required file: sd:/config/fusecheck/fusecheck_db.txt");
     } else {
         // System Information - single line
-        gfx_con_setpos(200, 150);
+        gfx_con_setpos(200, 180);
         SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
         gfx_printf("Firmware: ");
         SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
@@ -553,13 +575,13 @@ void show_fuse_check_horizontal(u8 burnt_fuses, u8 fw_major, u8 fw_minor, u8 fw_
         else
             gfx_puts("N/A");
 
-        gfx_con_setpos(200, 200);
+        gfx_con_setpos(200, 230);
         SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
         gfx_printf("Burnt Fuses: ");
         SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
         gfx_printf("%2d", burnt_fuses);
 
-        gfx_con_setpos(200, 250);
+        gfx_con_setpos(200, 280);
         SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
         gfx_printf("Required Fuses: ");
         SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
@@ -570,17 +592,17 @@ void show_fuse_check_horizontal(u8 burnt_fuses, u8 fw_major, u8 fw_minor, u8 fw_
     }
 
     // Status - large and clear
-    gfx_con_setpos(200, 350);
+    gfx_con_setpos(200, 380);
     if (!database_file_loaded) {
         // Database missing - cannot determine fuse status
         SETCOLOR(COLOR_YELLOW, COLOR_DEFAULT);
         gfx_puts("STATUS: DATABASE MISSING");
 
-        gfx_con_setpos(200, 400);
+        gfx_con_setpos(200, 430);
         SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
         gfx_puts("Copy config folder from release archive to SD card");
 
-        gfx_con_setpos(200, 450);
+        gfx_con_setpos(200, 480);
         SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
         gfx_puts("Path: sd:/config/fusecheck/");
     } else if (!fw_detected) {
@@ -588,58 +610,54 @@ void show_fuse_check_horizontal(u8 burnt_fuses, u8 fw_major, u8 fw_minor, u8 fw_
         SETCOLOR(COLOR_YELLOW, COLOR_DEFAULT);
         gfx_puts("STATUS: FIRMWARE NOT DETECTED");
 
-        gfx_con_setpos(200, 400);
+        gfx_con_setpos(200, 430);
         SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
         gfx_puts("Your firmware is not in the database.");
 
-        gfx_con_setpos(200, 450);
+        gfx_con_setpos(200, 480);
         SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
         gfx_puts("Please check for an updated build at:");
 
-        gfx_con_setpos(200, 500);
+        gfx_con_setpos(200, 530);
         SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
         gfx_puts("github.com/sthetix/FuseCheck");
     } else if (burnt_fuses < required_fuses) {
         SETCOLOR(COLOR_RED, COLOR_DEFAULT);
         gfx_puts("STATUS: FUSE MISMATCH");
 
-        gfx_con_setpos(200, 400);
+        gfx_con_setpos(200, 430);
         SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
         gfx_printf("Missing %d fuse(s) - OFW WILL NOT BOOT!", required_fuses - burnt_fuses);
 
-        gfx_con_setpos(200, 450);
+        gfx_con_setpos(200, 480);
         gfx_puts("System will black screen on OFW boot");
 
-        gfx_con_setpos(200, 520);
+        gfx_con_setpos(200, 550);
         SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
-        gfx_puts("What will work: CFW (Atmosphere), Semi-stock (Hekate nogc)");
+        gfx_puts("What will work: CFW (Atmosphere)");
     } else if (burnt_fuses > required_fuses) {
         SETCOLOR(COLOR_RED, COLOR_DEFAULT);
         gfx_puts("STATUS: FUSE MISMATCH (OVERBURNT)");
 
-        gfx_con_setpos(200, 400);
+        gfx_con_setpos(200, 430);
         SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
         gfx_printf("Extra %d fuse(s) burnt - OFW WILL NOT BOOT!", burnt_fuses - required_fuses);
 
-        gfx_con_setpos(200, 450);
+        gfx_con_setpos(200, 480);
         gfx_puts("System will black screen on OFW boot");
 
-        gfx_con_setpos(200, 520);
+        gfx_con_setpos(200, 550);
         SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
-        gfx_puts("What will work: CFW (Atmosphere), Semi-stock (Hekate nogc)");
-
-        gfx_con_setpos(200, 570);
-        SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
-        gfx_printf("Cannot downgrade below FW %d.x.x", burnt_fuses);
+        gfx_puts("What will work: CFW (Atmosphere)");
     } else {
         SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
         gfx_puts("STATUS: PERFECT MATCH");
 
-        gfx_con_setpos(200, 400);
+        gfx_con_setpos(200, 430);
         SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
         gfx_puts("Exact fuse count match - OFW WILL BOOT NORMALLY");
 
-        gfx_con_setpos(200, 450);
+        gfx_con_setpos(200, 480);
         gfx_puts("All systems operational");
     }
 
@@ -762,12 +780,25 @@ void ipl_main() {
     // Get burnt fuses
     u8 burnt_fuses = get_burnt_fuses();
 
-    // Detect firmware version from NCA
+    // Get console hardware type from fuse (no eMMC needed)
+    u32 hw_type = fuse_read_hw_type();
+
+    // Detect firmware version from NCA and read serial from PRODINFO
     u8 fw_major = 0, fw_minor = 0, fw_patch = 0;
     bool fw_detected = false;
+    char serial_number[0x19] = {0};
 
     if (emummc_storage_init_mmc() == 0) {
-        // Try NCA detection
+        // Read serial from PRODINFO (BIS key 0 already loaded in SE by derive_bis_keys_silently)
+        if (emummc_storage_set_mmc_partition(EMMC_GPP)) {
+            nx_emmc_cal0_t *cal0 = (nx_emmc_cal0_t *)malloc(NX_EMMC_CALIBRATION_SIZE);
+            if (cal0) {
+                if (cal0_read(KS_BIS_00_TWEAK, KS_BIS_00_CRYPT, cal0))
+                    strncpy(serial_number, cal0->serial_number, 0x18);
+                free(cal0);
+            }
+        }
+        // Detect firmware version from NCA (also uses GPP, loads BIS key 2 for SYSTEM)
         fw_detected = detect_firmware_from_nca(&fw_major, &fw_minor, &fw_patch, &keys);
         emummc_storage_end();
     }
@@ -781,7 +812,7 @@ void ipl_main() {
     touch_power_on();
 
     // Show results in horizontal layout (single page)
-    show_fuse_check_horizontal(burnt_fuses, fw_major, fw_minor, fw_patch, required_fuses, fw_detected);
+    show_fuse_check_horizontal(burnt_fuses, fw_major, fw_minor, fw_patch, required_fuses, fw_detected, serial_number, hw_type);
 
     // Wait for button to exit, support info page, scrolling, and screenshot combo
     bool on_info_page = false;
@@ -817,7 +848,7 @@ void ipl_main() {
             if (on_info_page)
                 show_fuse_info_page(scroll_offset);
             else
-                show_fuse_check_horizontal(burnt_fuses, fw_major, fw_minor, fw_patch, required_fuses, fw_detected);
+                show_fuse_check_horizontal(burnt_fuses, fw_major, fw_minor, fw_patch, required_fuses, fw_detected, serial_number, hw_type);
 
             btn_last = btn_read();
             continue;
@@ -891,7 +922,7 @@ void ipl_main() {
             if (btn & BTN_POWER)
             {
                 on_info_page = false;
-                show_fuse_check_horizontal(burnt_fuses, fw_major, fw_minor, fw_patch, required_fuses, fw_detected);
+                show_fuse_check_horizontal(burnt_fuses, fw_major, fw_minor, fw_patch, required_fuses, fw_detected, serial_number, hw_type);
                 continue;
             }
         }
