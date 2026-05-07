@@ -41,6 +41,7 @@
 #define KB_FIRMWARE_VERSION_1900 18
 #define KB_FIRMWARE_VERSION_2000 19 /* Support to FW 20.0.0 */
 #define KB_FIRMWARE_VERSION_2100 20 /* Support to FW 21.0.0 */
-#define KB_FIRMWARE_VERSION_MAX  KB_FIRMWARE_VERSION_2000 //!TODO: Update on mkey changes.
+#define KB_FIRMWARE_VERSION_2200 21 /* Support to FW 22.1.0 */
+#define KB_FIRMWARE_VERSION_MAX  KB_FIRMWARE_VERSION_2200 //!TODO: Update on mkey changes.
 
 #endif

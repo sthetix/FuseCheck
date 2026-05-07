@@ -87,6 +87,11 @@ static size_t fuse_db_count = 0;
 static bool database_loaded = false;
 static bool database_file_loaded = false;  // Track if DB file was actually loaded from SD
 
+typedef enum {
+    MAIN_ACTION_FUSE_MAP = 0,
+    MAIN_ACTION_EXIT = 1,
+} main_action_t;
+
 static bool str_ends_with(const char *s, const char *suffix) {
     if (!s || !suffix) return false;
     size_t ls = strlen(s);
@@ -521,12 +526,12 @@ static const char *get_console_name(u32 hw_type) {
     }
 }
 
-void show_fuse_check_horizontal(u8 burnt_fuses, u8 fw_major, u8 fw_minor, u8 fw_patch, u8 required_fuses, bool fw_detected, const char *serial, u32 hw_type) {
+void show_fuse_check_horizontal(u8 burnt_fuses, u8 fw_major, u8 fw_minor, u8 fw_patch, u8 required_fuses, bool fw_detected, const char *serial, u32 hw_type, main_action_t selected_action) {
     gfx_clear_grey(0x1B);
 
     // Title
     SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
-    print_centered(40, "NINTENDO SWITCH FUSE CHECKER 1.0.2");
+    print_centered(40, "NINTENDO SWITCH FUSE CHECKER 1.0.3");
 
     // Serial Number (left) and Console Type (right) - always shown
     gfx_con_setpos(200, 120);
@@ -661,13 +666,16 @@ void show_fuse_check_horizontal(u8 burnt_fuses, u8 fw_major, u8 fw_minor, u8 fw_
         gfx_puts("All systems operational");
     }
 
-    // Footer
-    // X controls vertical position (top to bottom in landscape view)
-    // Y controls horizontal position (left to right in landscape view)
-    // Adjust Y value: smaller = more left, larger = more right
-    // Screen width in landscape is 1280, so center is around 640
+    gfx_con_setpos(220, 610);
+    SETCOLOR(selected_action == MAIN_ACTION_FUSE_MAP ? COLOR_CYAN : COLOR_WHITE, COLOR_DEFAULT);
+    gfx_printf("%s View Fuse Map", selected_action == MAIN_ACTION_FUSE_MAP ? ">" : " ");
+
+    gfx_con_setpos(720, 610);
+    SETCOLOR(selected_action == MAIN_ACTION_EXIT ? COLOR_CYAN : COLOR_WHITE, COLOR_DEFAULT);
+    gfx_printf("%s Return to Hekate", selected_action == MAIN_ACTION_EXIT ? ">" : " ");
+
     SETCOLOR(COLOR_RED, COLOR_DEFAULT);
-    print_centered(650, "VOL+:Fuse Map | Power:Back | 3-Finger:Screenshot");
+    print_centered(650, "VOL:Move Cursor | Power:Select | 3-Finger:Screenshot");
 }
 
 
@@ -811,8 +819,13 @@ void ipl_main() {
     // Initialize touchscreen for 3-finger screenshot support
     touch_power_on();
 
+    // Prime the database state before the first render so button-driven pages
+    // and the initial status screen operate on the same loaded data.
+    load_database();
+
     // Show results in horizontal layout (single page)
-    show_fuse_check_horizontal(burnt_fuses, fw_major, fw_minor, fw_patch, required_fuses, fw_detected, serial_number, hw_type);
+    main_action_t selected_action = MAIN_ACTION_FUSE_MAP;
+    show_fuse_check_horizontal(burnt_fuses, fw_major, fw_minor, fw_patch, required_fuses, fw_detected, serial_number, hw_type, selected_action);
 
     // Wait for button to exit, support info page, scrolling, and screenshot combo
     bool on_info_page = false;
@@ -836,19 +849,19 @@ void ipl_main() {
             if (!save_fb_to_bmp())
             {
                 SETCOLOR(COLOR_GREEN, COLOR_DEFAULT);
-                print_centered(620, "Screenshot saved!");
+                print_centered(690, "Screenshot saved!");
                 msleep(1000);
             }
             else
             {
                 SETCOLOR(COLOR_RED, COLOR_DEFAULT);
-                print_centered(620, "Screenshot failed!");
+                print_centered(690, "Screenshot failed!");
                 msleep(1000);
             }
             if (on_info_page)
                 show_fuse_info_page(scroll_offset);
             else
-                show_fuse_check_horizontal(burnt_fuses, fw_major, fw_minor, fw_patch, required_fuses, fw_detected, serial_number, hw_type);
+                show_fuse_check_horizontal(burnt_fuses, fw_major, fw_minor, fw_patch, required_fuses, fw_detected, serial_number, hw_type, selected_action);
 
             btn_last = btn_read();
             continue;
@@ -856,34 +869,41 @@ void ipl_main() {
 
         // Non-blocking button read
         u32 btn = btn_read();
-
-        // Only process button presses (ignore button releases and repeats)
-        if (btn == btn_last)
-        {
-            msleep(10);
-            continue;
-        }
-
+        u32 pressed = btn & ~btn_last;
         btn_last = btn;
 
-        // Ignore button releases (when btn becomes 0)
-        if (!btn)
+        // Only process newly pressed buttons.
+        if (!pressed)
         {
             msleep(10);
             continue;
         }
 
-        bool vol_up = btn & BTN_VOL_UP;
-        bool vol_dn = btn & BTN_VOL_DOWN;
+        bool vol_up = pressed & BTN_VOL_UP;
+        bool vol_dn = pressed & BTN_VOL_DOWN;
 
         // On main page: VOL+ toggles to info page
         if (!on_info_page)
         {
-            if (vol_up)
+            if (vol_up || vol_dn)
             {
-                on_info_page = true;
-                scroll_offset = 0; // Reset scroll when entering info page
-                show_fuse_info_page(scroll_offset);
+                selected_action = (selected_action == MAIN_ACTION_FUSE_MAP) ? MAIN_ACTION_EXIT : MAIN_ACTION_FUSE_MAP;
+                show_fuse_check_horizontal(burnt_fuses, fw_major, fw_minor, fw_patch, required_fuses, fw_detected, serial_number, hw_type, selected_action);
+                continue;
+            }
+
+            if (pressed & BTN_POWER)
+            {
+                if (selected_action == MAIN_ACTION_FUSE_MAP)
+                {
+                    on_info_page = true;
+                    scroll_offset = 0;
+                    show_fuse_info_page(scroll_offset);
+                }
+                else
+                {
+                    break;
+                }
                 continue;
             }
         }
@@ -919,17 +939,13 @@ void ipl_main() {
             }
 
             // Power: go back to main page when on fuse list
-            if (btn & BTN_POWER)
+            if (pressed & BTN_POWER)
             {
                 on_info_page = false;
-                show_fuse_check_horizontal(burnt_fuses, fw_major, fw_minor, fw_patch, required_fuses, fw_detected, serial_number, hw_type);
+                show_fuse_check_horizontal(burnt_fuses, fw_major, fw_minor, fw_patch, required_fuses, fw_detected, serial_number, hw_type, selected_action);
                 continue;
             }
         }
-
-        // Power on main page: exit to Hekate
-        if (!on_info_page && (btn & BTN_POWER))
-            break;
     }
 
     // Launch bootloader/update.bin instead of reboot
