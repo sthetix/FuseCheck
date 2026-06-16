@@ -516,6 +516,40 @@ void print_centered(int y, const char *text) {
     gfx_puts(text);
 }
 
+static void draw_app_bars(const char *footer) {
+    char title[64];
+    s_printf(title, "[FuseCheck v%d.%d.%d]", LP_VER_MJ, LP_VER_MN, LP_VER_BF);
+    gfx_draw_title_bar(title);
+    gfx_draw_bottom_bar(footer);
+}
+
+static void print_field(int x, int y, const char *label, const char *value) {
+    gfx_con_setpos(x, y);
+    SETCOLOR(0xFFAAAAAA, COLOR_DEFAULT);
+    gfx_puts(label);
+    SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
+    gfx_puts(value);
+}
+
+static void print_field_num(int x, int y, const char *label, int value) {
+    gfx_con_setpos(x, y);
+    SETCOLOR(0xFFAAAAAA, COLOR_DEFAULT);
+    gfx_puts(label);
+    SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
+    gfx_printf("%d", value);
+}
+
+static void draw_action(int x, int y, const char *text, bool selected) {
+    gfx_con_setpos(x, y);
+    if (selected)
+        gfx_con_setcol(COLOR_DEFAULT, 1, COLOR_CYAN);
+    else
+        gfx_con_setcol(COLOR_WHITE, 1, COLOR_DEFAULT);
+
+    gfx_printf(" %s ", text);
+    RESETCOLOR;
+}
+
 static const char *get_console_name(u32 hw_type) {
     switch (hw_type) {
     case FUSE_NX_HW_TYPE_ICOSA: return "Erista - Icosa (V1)";
@@ -528,175 +562,124 @@ static const char *get_console_name(u32 hw_type) {
 
 void show_fuse_check_horizontal(u8 burnt_fuses, u8 fw_major, u8 fw_minor, u8 fw_patch, u8 required_fuses, bool fw_detected, const char *serial, u32 hw_type, main_action_t selected_action) {
     gfx_clear_grey(0x1B);
+    draw_app_bars("VOL: Move   Power: Select   3-Finger: Screenshot");
 
-    // Title
+    char fw_version[16];
+    if (fw_detected)
+        s_printf(fw_version, "%d.%d.%d", fw_major, fw_minor, fw_patch);
+    else
+        s_printf(fw_version, "N/A");
+
     SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
-    print_centered(40, "NINTENDO SWITCH FUSE CHECKER 1.0.3");
+    print_centered(48, "Nintendo Switch Fuse Compatibility");
 
-    // Serial Number (left) and Console Type (right) - always shown
-    gfx_con_setpos(200, 120);
+    print_field(180, 144, "Serial: ", serial[0] ? serial : "N/A");
+    print_field(180, 184, "Console: ", get_console_name(hw_type));
+
+    print_field(720, 144, "Firmware: ", database_file_loaded ? fw_version : "N/A");
+    print_field_num(720, 184, "Burnt Fuses: ", burnt_fuses);
+    gfx_con_setpos(720, 224);
+    SETCOLOR(0xFFAAAAAA, COLOR_DEFAULT);
+    gfx_puts("Required Fuses: ");
     SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
-    gfx_printf("Serial: ");
-    SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
-    gfx_puts(serial[0] ? serial : "N/A");
+    if (database_file_loaded && fw_detected)
+        gfx_printf("%d", required_fuses);
+    else
+        gfx_puts("N/A");
 
-    gfx_con_setpos(700, 120);
-    SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
-    gfx_printf("Console: ");
-    SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
-    gfx_puts(get_console_name(hw_type));
-
-    // Show database missing warning if applicable
     if (!database_file_loaded) {
-        gfx_con_setpos(200, 150);
-        SETCOLOR(COLOR_RED, COLOR_DEFAULT);
-        gfx_printf("WARNING: fusecheck_db.txt NOT FOUND!");
-        gfx_con_setpos(200, 180);
-        SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
-        gfx_printf("Please copy config folder to SD card");
-
-        // Don't show firmware info if database is missing
-        gfx_con_setpos(200, 250);
-        SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
-        gfx_printf("Burnt Fuses: ");
-        SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
-        gfx_printf("%2d", burnt_fuses);
-
-        gfx_con_setpos(200, 300);
-        SETCOLOR(COLOR_RED, COLOR_DEFAULT);
-        gfx_puts("Cannot verify fuse compatibility without database!");
-
-        gfx_con_setpos(200, 350);
-        SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
-        gfx_puts("Required file: sd:/config/fusecheck/fusecheck_db.txt");
-    } else {
-        // System Information - single line
-        gfx_con_setpos(200, 180);
-        SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
-        gfx_printf("Firmware: ");
-        SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
-        if (fw_detected)
-            gfx_printf("%d.%d.%d", fw_major, fw_minor, fw_patch);
-        else
-            gfx_puts("N/A");
-
-        gfx_con_setpos(200, 230);
-        SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
-        gfx_printf("Burnt Fuses: ");
-        SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
-        gfx_printf("%2d", burnt_fuses);
-
-        gfx_con_setpos(200, 280);
-        SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
-        gfx_printf("Required Fuses: ");
-        SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
-        if (fw_detected)
-            gfx_printf("%2d", required_fuses);
-        else
-            gfx_puts("N/A");
-    }
-
-    // Status - large and clear
-    gfx_con_setpos(200, 380);
-    if (!database_file_loaded) {
-        // Database missing - cannot determine fuse status
         SETCOLOR(COLOR_YELLOW, COLOR_DEFAULT);
+        gfx_con_setpos(180, 312);
         gfx_puts("STATUS: DATABASE MISSING");
 
-        gfx_con_setpos(200, 430);
+        gfx_con_setpos(180, 368);
         SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
         gfx_puts("Copy config folder from release archive to SD card");
 
-        gfx_con_setpos(200, 480);
+        gfx_con_setpos(180, 416);
         SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
-        gfx_puts("Path: sd:/config/fusecheck/");
+        gfx_puts("Required: sd:/config/fusecheck/fusecheck_db.txt");
     } else if (!fw_detected) {
-        // DB loaded but firmware NCA not found - likely newer FW not yet in DB
         SETCOLOR(COLOR_YELLOW, COLOR_DEFAULT);
+        gfx_con_setpos(180, 312);
         gfx_puts("STATUS: FIRMWARE NOT DETECTED");
 
-        gfx_con_setpos(200, 430);
+        gfx_con_setpos(180, 368);
         SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
         gfx_puts("Your firmware is not in the database.");
 
-        gfx_con_setpos(200, 480);
+        gfx_con_setpos(180, 416);
         SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
-        gfx_puts("Please check for an updated build at:");
-
-        gfx_con_setpos(200, 530);
-        SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
-        gfx_puts("github.com/sthetix/FuseCheck");
+        gfx_puts("Check for an updated build at github.com/sthetix/FuseCheck");
     } else if (burnt_fuses < required_fuses) {
         SETCOLOR(COLOR_RED, COLOR_DEFAULT);
+        gfx_con_setpos(180, 312);
         gfx_puts("STATUS: FUSE MISMATCH");
 
-        gfx_con_setpos(200, 430);
+        gfx_con_setpos(180, 368);
         SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
         gfx_printf("Missing %d fuse(s) - OFW WILL NOT BOOT!", required_fuses - burnt_fuses);
 
-        gfx_con_setpos(200, 480);
+        gfx_con_setpos(180, 416);
         gfx_puts("System will black screen on OFW boot");
 
-        gfx_con_setpos(200, 550);
+        gfx_con_setpos(180, 480);
         SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
         gfx_puts("What will work: CFW (Atmosphere)");
     } else if (burnt_fuses > required_fuses) {
         SETCOLOR(COLOR_RED, COLOR_DEFAULT);
+        gfx_con_setpos(180, 312);
         gfx_puts("STATUS: FUSE MISMATCH (OVERBURNT)");
 
-        gfx_con_setpos(200, 430);
+        gfx_con_setpos(180, 368);
         SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
         gfx_printf("Extra %d fuse(s) burnt - OFW WILL NOT BOOT!", burnt_fuses - required_fuses);
 
-        gfx_con_setpos(200, 480);
+        gfx_con_setpos(180, 416);
         gfx_puts("System will black screen on OFW boot");
 
-        gfx_con_setpos(200, 550);
+        gfx_con_setpos(180, 480);
         SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
         gfx_puts("What will work: CFW (Atmosphere)");
     } else {
         SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
+        gfx_con_setpos(180, 312);
         gfx_puts("STATUS: PERFECT MATCH");
 
-        gfx_con_setpos(200, 430);
+        gfx_con_setpos(180, 368);
         SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
         gfx_puts("Exact fuse count match - OFW WILL BOOT NORMALLY");
 
-        gfx_con_setpos(200, 480);
+        gfx_con_setpos(180, 416);
         gfx_puts("All systems operational");
     }
 
-    gfx_con_setpos(220, 610);
-    SETCOLOR(selected_action == MAIN_ACTION_FUSE_MAP ? COLOR_CYAN : COLOR_WHITE, COLOR_DEFAULT);
-    gfx_printf("%s View Fuse Map", selected_action == MAIN_ACTION_FUSE_MAP ? ">" : " ");
+    draw_action(320, 616, "View Fuse Map", selected_action == MAIN_ACTION_FUSE_MAP);
+    draw_action(700, 616, "Return to Hekate", selected_action == MAIN_ACTION_EXIT);
+}
 
-    gfx_con_setpos(720, 610);
-    SETCOLOR(selected_action == MAIN_ACTION_EXIT ? COLOR_CYAN : COLOR_WHITE, COLOR_DEFAULT);
-    gfx_printf("%s Return to Hekate", selected_action == MAIN_ACTION_EXIT ? ">" : " ");
+static void redraw_main_actions(main_action_t selected_action) {
+    gfx_con_setpos(304, 616);
+    gfx_con_setcol(COLOR_WHITE, 1, COLOR_DEFAULT);
+    gfx_puts("                  ");
+    gfx_con_setpos(684, 616);
+    gfx_puts("                    ");
 
-    SETCOLOR(COLOR_RED, COLOR_DEFAULT);
-    print_centered(650, "VOL:Move Cursor | Power:Select | 3-Finger:Screenshot");
+    draw_action(320, 616, "View Fuse Map", selected_action == MAIN_ACTION_FUSE_MAP);
+    draw_action(700, 616, "Return to Hekate", selected_action == MAIN_ACTION_EXIT);
 }
 
 
-static void show_fuse_info_page(int scroll_offset) {
-    // Calculate how many entries fit on screen (from y=200 to y=620, footer at 650)
-    const int entries_per_page = 15; // (620-200) / 28 rows spacing
+static void redraw_fuse_info_rows(int scroll_offset) {
+    const int entries_per_page = 17;
+    int row_y = 152;
 
-    gfx_clear_grey(0x1B);
-    SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
-    print_centered(80, "SWITCHBREW FUSE MAP");
+    gfx_con_setcol(COLOR_WHITE, 1, COLOR_DEFAULT);
+    for (int y = 152; y <= 640; y += 28) {
+        gfx_con_setpos(140, y);
+        gfx_puts("                                                            ");
+    }
 
-    SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
-    gfx_con_setpos(120, 160);
-    gfx_printf("System Version");
-    gfx_con_setpos(620, 160);
-    gfx_printf("Fuses");
-
-    // Try loading database (once)
-    load_database();
-
-    int row_y = 200;
     if (fuse_db_count > 0) {
 
         // Display database entries with scrolling
@@ -706,34 +689,49 @@ static void show_fuse_info_page(int scroll_offset) {
 
         for (size_t i = start_idx; i < end_idx; i++, row_y += 28) {
             SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
-            gfx_con_setpos(120, row_y);
+            gfx_con_setpos(160, row_y);
             gfx_printf("%s", fuse_db[i].version_range);
 
-            gfx_con_setpos(640, row_y);
+            gfx_con_setpos(720, row_y);
             SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
             gfx_printf("%2d", fuse_db[i].prod_fuses);
         }
 
         // Show scroll indicator if there are more entries
         if (fuse_db_count > entries_per_page) {
-            gfx_con_setpos(1000, 620);
+            gfx_con_setpos(980, 640);
             SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
             gfx_printf("[%d-%d/%d]", (int)start_idx + 1, (int)end_idx, (int)fuse_db_count);
         }
     } else {
         // No database loaded
-        gfx_con_setpos(120, row_y);
+        gfx_con_setpos(160, row_y);
         SETCOLOR(COLOR_RED, COLOR_DEFAULT);
         gfx_printf("Database file not found!");
         SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
-        gfx_con_setpos(120, row_y + 40);
+        gfx_con_setpos(160, row_y + 40);
         gfx_printf("Please copy fusecheck_db.txt to:");
-        gfx_con_setpos(120, row_y + 70);
+        gfx_con_setpos(160, row_y + 70);
         gfx_printf("sd:/config/fusecheck/fusecheck_db.txt");
     }
+}
 
-    SETCOLOR(COLOR_RED, COLOR_DEFAULT);
-    print_centered(650, "VOL+:Scroll Down | VOL-:Scroll Up | Power:Back | 3-Finger:Screenshot");
+static void show_fuse_info_page(int scroll_offset) {
+    gfx_clear_grey(0x1B);
+    draw_app_bars("VOL+: Down   VOL-: Up   Power: Back   3-Finger: Screenshot");
+
+    SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
+    print_centered(48, "Switchbrew Fuse Map");
+
+    SETCOLOR(0xFFAAAAAA, COLOR_DEFAULT);
+    gfx_con_setpos(160, 112);
+    gfx_printf("System Version");
+    gfx_con_setpos(700, 112);
+    gfx_printf("Fuses");
+
+    // Try loading database (once)
+    load_database();
+    redraw_fuse_info_rows(scroll_offset);
 }
 
 
@@ -830,7 +828,7 @@ void ipl_main() {
     // Wait for button to exit, support info page, scrolling, and screenshot combo
     bool on_info_page = false;
     int scroll_offset = 0;
-    const int entries_per_page = 15;
+    const int entries_per_page = 17;
 
     u32 btn_last = btn_read();
 
@@ -888,7 +886,7 @@ void ipl_main() {
             if (vol_up || vol_dn)
             {
                 selected_action = (selected_action == MAIN_ACTION_FUSE_MAP) ? MAIN_ACTION_EXIT : MAIN_ACTION_FUSE_MAP;
-                show_fuse_check_horizontal(burnt_fuses, fw_major, fw_minor, fw_patch, required_fuses, fw_detected, serial_number, hw_type, selected_action);
+                redraw_main_actions(selected_action);
                 continue;
             }
 
@@ -920,7 +918,7 @@ void ipl_main() {
                 if (scroll_offset < max_scroll)
                 {
                     scroll_offset++;
-                    show_fuse_info_page(scroll_offset);
+                    redraw_fuse_info_rows(scroll_offset);
                 }
                 // If at bottom, do nothing (just stay there)
                 continue;
@@ -932,7 +930,7 @@ void ipl_main() {
                 if (scroll_offset > 0)
                 {
                     scroll_offset--;
-                    show_fuse_info_page(scroll_offset);
+                    redraw_fuse_info_rows(scroll_offset);
                 }
                 // If at top, do nothing (just stay there)
                 continue;
