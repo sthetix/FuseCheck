@@ -37,7 +37,7 @@
 [FUSE] 21.0.0-21.2.0 22
 [FUSE] 22.0.0-22.1.0 23
 [FUSE] 22.5.0 23
-[FUSE] 23.0.0 None
+[FUSE] 23.0.0 24
 
 # ===== NCA DATABASE =====
 # Format: [NCA] <version> <nca_filename>
