@@ -8,6 +8,7 @@ on:
   push:
     paths:
       - 'scripts/update_db.py'
+      - '.github/workflows/update-database.yml'
 
 jobs:
   update-db:
@@ -47,100 +48,104 @@ jobs:
             echo "Latest firmware: ${{ steps.fetch_firmware.outputs.latest_fw }}"
           fi
 
-      - name: Update release zip
-        if: steps.check_changes.outputs.changed == 'true'
+      - name: Resolve latest release
+        id: latest_release
+        if: steps.check_changes.outputs.changed == 'true' || github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Download existing release zip
-          gh release download v1.0.1 --dir output_download --pattern 'FuseCheck-*.zip'
+          TARGET_TAG=$(gh release list --limit 100 --json tagName,isDraft,isPrerelease --jq \
+            '[.[] | select(.isDraft == false and .isPrerelease == false) | .tagName | select(test("^v?[0-9]+\\.[0-9]+\\.[0-9]+$"))] | sort_by(ltrimstr("v") | split(".") | map(tonumber)) | last')
 
-          if [ -f "output_download/FuseCheck-1.0.1.zip" ]; then
-            echo "Updating existing v1.0.1 zip..."
-            ZIP_FILE="output_download/FuseCheck-1.0.1.zip"
-          else
-            echo "No existing zip found, using placeholder"
-            ZIP_FILE=""
+          if [ -z "$TARGET_TAG" ] || [ "$TARGET_TAG" = "null" ]; then
+            echo "No stable semantic-versioned release found"
+            exit 1
           fi
+
+          TARGET_ASSET=$(gh release view "$TARGET_TAG" --json assets --jq \
+            '[.assets[].name | select(startswith("FuseCheck-") and endswith(".zip"))] | first')
+
+          if [ -z "$TARGET_ASSET" ] || [ "$TARGET_ASSET" = "null" ]; then
+            echo "No FuseCheck zip found in release $TARGET_TAG"
+            exit 1
+          fi
+
+          echo "tag=$TARGET_TAG" >> "$GITHUB_OUTPUT"
+          echo "asset=$TARGET_ASSET" >> "$GITHUB_OUTPUT"
+          echo "Using release $TARGET_TAG and asset $TARGET_ASSET"
+
+      - name: Update release zip
+        if: steps.check_changes.outputs.changed == 'true' || github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_TAG: ${{ steps.latest_release.outputs.tag }}
+          TARGET_ASSET: ${{ steps.latest_release.outputs.asset }}
+        run: |
+          # Download existing release zip
+          gh release download "$TARGET_TAG" --dir output_download --pattern "$TARGET_ASSET"
+
+          ZIP_FILE="output_download/$TARGET_ASSET"
+          echo "Updating $TARGET_ASSET from release $TARGET_TAG..."
 
           # Create updated zip
           rm -rf zip_tmp
           mkdir -p zip_tmp/bootloader/payloads
           mkdir -p zip_tmp/config/fusecheck
 
-          if [ -n "$ZIP_FILE" ] && [ -f "$ZIP_FILE" ]; then
-            # Extract existing zip
-            unzip -q "$ZIP_FILE" -d zip_tmp
-          fi
+          # Extract existing zip
+          unzip -q "$ZIP_FILE" -d zip_tmp
 
           # Update with new database
           cp fusecheck_db.txt zip_tmp/config/fusecheck/
 
           # Rezip
-          cd zip_tmp && zip -r ../FuseCheck-1.0.1.zip . && cd ..
+          cd zip_tmp && zip -r "../$TARGET_ASSET" . && cd ..
 
-          echo "Zip created: $(ls -lh FuseCheck-1.0.1.zip)"
+          echo "Zip created: $(ls -lh "$TARGET_ASSET")"
           rm -rf output_download zip_tmp
 
       - name: Update release
-        if: steps.check_changes.outputs.changed == 'true'
+        if: steps.check_changes.outputs.changed == 'true' || github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
+          TARGET_TAG: ${{ steps.latest_release.outputs.tag }}
+          TARGET_ASSET: ${{ steps.latest_release.outputs.asset }}
         run: |
-          # Create release notes
+          # Preserve existing release notes and refresh the generated database section
           DATE="$(date -u +"%Y-%m-%d %H:%M:%S UTC")"
           COUNT=$(grep -c "^\[NCA\]" fusecheck_db.txt || echo "0")
+          gh release view "$TARGET_TAG" --json body --jq .body > release_notes.md
 
-          cat > release_notes.md << 'EOF'
-          # FuseCheck v1.0.1
+          python3 - "${{ steps.fetch_firmware.outputs.latest_fw }}" "$DATE" "$COUNT" << 'PY'
+          from pathlib import Path
+          import re
+          import sys
 
-          **Latest supported firmware: {LATEST_FW}**
+          path = Path("release_notes.md")
+          body = path.read_text()
+          start = "<!-- auto-database:start -->"
+          end = "<!-- auto-database:end -->"
+          block = f"""{start}
+          ## Current Database
+          - Latest supported firmware: `{sys.argv[1]}`
+          - Source: [FuseNCA](https://github.com/sthetix/FuseNCA)
+          - Updated: {sys.argv[2]}
+          - Supported firmware versions: {sys.argv[3]}
+          {end}"""
 
-          ## What is FuseCheck?
-          A Nintendo Switch fuse checker that detects your firmware version and burnt fuses to determine if your system can boot OFW safely.
+          if start in body and end in body:
+              before, remainder = body.split(start, 1)
+              _, after = remainder.split(end, 1)
+              body = before.rstrip() + "\n\n" + block + after
+          else:
+              body = re.sub(r"\n### Database\s*\n.*?(?=\n### |\Z)", "", body, flags=re.DOTALL)
+              body = body.rstrip() + "\n\n" + block + "\n"
 
-          ## Installation
-          1. Download `FuseCheck-1.0.1.zip`
-          2. Extract to your SD card
-          3. Run via Hekate payload
+          path.write_text(body)
+          PY
 
-          ## Database Information
-          - Database sourced from [FuseNCA](https://github.com/sthetix/FuseNCA)
-          - Auto-generated on: {DATE}
-          - Total firmware versions supported: {COUNT}
-
-          ## How it works
-          - Reads fuse counts from hardware (ODM6/ODM7)
-          - Detects firmware from SystemVersion NCA
-          - Compares against the database
-          - Shows if your system can boot OFW
-
-          ---
-
-          *This release is automatically updated when new firmware is released.*
-          EOF
-
-          # Replace placeholders
-          sed -i "s/{LATEST_FW}/${{ steps.fetch_firmware.outputs.latest_fw }}/g" release_notes.md
-          sed -i "s/{DATE}/$DATE/g" release_notes.md
-          sed -i "s/{COUNT}/$COUNT/g" release_notes.md
-
-          # Update existing release
-          gh release edit v1.0.1 \
-            --notes-file release_notes.md \
-            --title "FuseCheck v1.0.1 (FW ${{ steps.fetch_firmware.outputs.latest_fw }})" 2>/dev/null || \
-          gh release create v1.0.1 \
-            --title "FuseCheck v1.0.1 (FW ${{ steps.fetch_firmware.outputs.latest_fw }})" \
-            --notes-file release_notes.md \
-            --latest
-
-          # Delete old zip asset if exists and upload new one
-          for ASSET_URL in $(gh api repos/${{ github.repository }}/releases/tags/v1.0.1 --jq '.assets[] | select(.name | startswith("FuseCheck-")) | .url'); do
-            gh api -X DELETE "$ASSET_URL"
-            echo "Deleted asset: $ASSET_URL"
-          done
-
-          gh release upload v1.0.1 "FuseCheck-1.0.1.zip"
+          gh release edit "$TARGET_TAG" --notes-file release_notes.md
+          gh release upload "$TARGET_TAG" "$TARGET_ASSET" --clobber
 
       - name: Commit database changes
         if: steps.check_changes.outputs.changed == 'true'
