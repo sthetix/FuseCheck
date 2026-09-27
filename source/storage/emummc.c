@@ -41,6 +41,7 @@ void emummc_load_cfg()
 	emu_cfg.file_based_part_size = 0;
 	emu_cfg.active_part = 0;
 	emu_cfg.fs_ver = 0;
+	emu_cfg.read_only = false;
 	if (!emu_cfg.nintendo_path)
 		emu_cfg.nintendo_path = (char *)malloc(0x200);
 	if (!emu_cfg.emummc_file_based_path)
@@ -155,6 +156,9 @@ int emummc_storage_init_mmc()
 
 	if (!emu_cfg.sector)
 	{
+		if (!emu_cfg.path || !emu_cfg.path[0] || strlen(emu_cfg.path) > 0x200 - sizeof("/eMMC/BOOT0"))
+			goto out;
+
 		strcpy(emu_cfg.emummc_file_based_path, emu_cfg.path);
 		strcat(emu_cfg.emummc_file_based_path, "/eMMC");
 
@@ -163,7 +167,8 @@ int emummc_storage_init_mmc()
 			EPRINTF("Failed to open eMMC folder.");
 			goto out;
 		}
-		f_chmod(emu_cfg.emummc_file_based_path, AM_ARC, AM_ARC);
+		if (!emu_cfg.read_only)
+			f_chmod(emu_cfg.emummc_file_based_path, AM_ARC, AM_ARC);
 
 		strcat(emu_cfg.emummc_file_based_path, "/00");
 		if (f_stat(emu_cfg.emummc_file_based_path, &fno))
@@ -171,6 +176,8 @@ int emummc_storage_init_mmc()
 			EPRINTF("Failed to open emuMMC rawnand.");
 			goto out;
 		}
+		if ((fno.fattrib & AM_DIR) || !fno.fsize || (fno.fsize & 0x1FF) || (fno.fsize >> 9) > 0xFFFFFFFFULL)
+			goto out;
 		emu_cfg.file_based_part_size = fno.fsize >> 9;
 	}
 
@@ -197,38 +204,52 @@ int emummc_storage_read(u32 sector, u32 num_sectors, void *buf)
 		return sdmmc_storage_read(&emmc_storage, sector, num_sectors, buf);
 	else if (emu_cfg.sector)
 	{
-		sector += emu_cfg.sector;
-		sector += emummc_raw_get_part_off(emu_cfg.active_part) * 0x2000;
-		return sdmmc_storage_read(&sd_storage, sector, num_sectors, buf);
+		u64 sd_sector = (u64)sector + emu_cfg.sector + emummc_raw_get_part_off(emu_cfg.active_part) * 0x2000;
+		if (sd_sector >= sd_storage.sec_cnt || num_sectors > sd_storage.sec_cnt - sd_sector)
+			return 0;
+		return sdmmc_storage_read(&sd_storage, (u32)sd_sector, num_sectors, buf);
 	}
 	else
 	{
-		if (!emu_cfg.active_part)
+		while (num_sectors)
 		{
-			u32 file_part = sector / emu_cfg.file_based_part_size;
-			sector = sector % emu_cfg.file_based_part_size;
-			if (file_part >= 10)
-				itoa(file_part, emu_cfg.emummc_file_based_path + strlen(emu_cfg.emummc_file_based_path) - 2, 10);
-			else
+			u32 file_sector = sector;
+			u32 count = num_sectors > 0x7FFFFF ? 0x7FFFFF : num_sectors;
+			if (!emu_cfg.active_part)
 			{
-				emu_cfg.emummc_file_based_path[strlen(emu_cfg.emummc_file_based_path) - 2] = '0';
-				itoa(file_part, emu_cfg.emummc_file_based_path + strlen(emu_cfg.emummc_file_based_path) - 1, 10);
+				if (!emu_cfg.file_based_part_size)
+					return 0;
+				u32 file_part = sector / emu_cfg.file_based_part_size;
+				if (file_part > 99)
+					return 0;
+				file_sector = sector % emu_cfg.file_based_part_size;
+				if (count > emu_cfg.file_based_part_size - file_sector)
+					count = emu_cfg.file_based_part_size - file_sector;
+				char *suffix = emu_cfg.emummc_file_based_path + strlen(emu_cfg.emummc_file_based_path) - 2;
+				suffix[0] = '0' + file_part / 10;
+				suffix[1] = '0' + file_part % 10;
 			}
-		}
-		if (f_open(&fp, emu_cfg.emummc_file_based_path, FA_READ))
-		{
-			EPRINTF("Failed to open emuMMC image.");
-			return 0;
-		}
-		f_lseek(&fp, (u64)sector << 9);
-		if (f_read(&fp, buf, (u64)num_sectors << 9, NULL))
-		{
-			EPRINTF("Failed to read emuMMC image.");
+			if (f_open(&fp, emu_cfg.emummc_file_based_path, FA_READ))
+			{
+				EPRINTF("Failed to open emuMMC image.");
+				return 0;
+			}
+			UINT bytes_read = 0;
+			UINT bytes = count << 9;
+			FRESULT res = f_lseek(&fp, (u64)file_sector << 9);
+			if (res == FR_OK)
+				res = f_read(&fp, buf, bytes, &bytes_read);
 			f_close(&fp);
-			return 0;
+			if (res != FR_OK || bytes_read != bytes)
+			{
+				EPRINTF("Failed to read emuMMC image.");
+				return 0;
+			}
+			sector += count;
+			num_sectors -= count;
+			buf = (u8 *)buf + bytes;
 		}
 
-		f_close(&fp);
 		return 1;
 	}
 
@@ -238,6 +259,8 @@ int emummc_storage_read(u32 sector, u32 num_sectors, void *buf)
 int emummc_storage_write(u32 sector, u32 num_sectors, void *buf)
 {
 	FIL fp;
+	if (emu_cfg.read_only)
+		return 0;
 	if (!emu_cfg.enabled || h_cfg.emummc_force_disable)
 		return sdmmc_storage_write(&emmc_storage, sector, num_sectors, buf);
 	else if (emu_cfg.sector)

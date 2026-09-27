@@ -45,6 +45,7 @@ typedef struct _emummc_cfg_t
 	u32 file_based_part_size;
 	u32 active_part;
 	int fs_ver;
+	bool read_only;
 } emummc_cfg_t;
 
 extern emummc_cfg_t emu_cfg;

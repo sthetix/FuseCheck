@@ -32,7 +32,10 @@ void nx_emmc_gpt_parse(link_t *gpt, sdmmc_storage_t *storage)
 {
 	gpt_t *gpt_buf = (gpt_t *)calloc(NX_GPT_NUM_BLOCKS, NX_EMMC_BLOCKSIZE);
 
-	emummc_storage_read(NX_GPT_FIRST_LBA, NX_GPT_NUM_BLOCKS, gpt_buf);
+	if (!gpt_buf)
+		return;
+	if (!emummc_storage_read(NX_GPT_FIRST_LBA, NX_GPT_NUM_BLOCKS, gpt_buf))
+		goto out;
 
 	// Check if no GPT or more than max allowed entries.
 	if (memcmp(&gpt_buf->header.signature, "EFI PART", 8) || gpt_buf->header.num_part_ents > 128)
@@ -41,9 +44,17 @@ void nx_emmc_gpt_parse(link_t *gpt, sdmmc_storage_t *storage)
 	for (u32 i = 0; i < gpt_buf->header.num_part_ents; i++)
 	{
 		emmc_part_t *part = (emmc_part_t *)calloc(sizeof(emmc_part_t), 1);
+		if (!part)
+			goto out;
 
-		if (gpt_buf->entries[i].lba_start < gpt_buf->header.first_use_lba)
+		if (gpt_buf->entries[i].lba_start < gpt_buf->header.first_use_lba ||
+			gpt_buf->entries[i].lba_end < gpt_buf->entries[i].lba_start ||
+			gpt_buf->entries[i].lba_end > gpt_buf->header.last_use_lba ||
+			gpt_buf->entries[i].lba_end > 0xFFFFFFFFULL)
+		{
+			free(part);
 			continue;
+		}
 
 		part->index = i;
 		part->lba_start = gpt_buf->entries[i].lba_start;

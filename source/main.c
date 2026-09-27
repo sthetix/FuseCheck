@@ -87,6 +87,9 @@ static size_t fuse_db_count = 0;
 static bool database_loaded = false;
 static bool database_file_loaded = false;  // Track if DB file was actually loaded from SD
 
+static char emummc_firmware[24] = "NOT FOUND";
+static const char *emummc_type = "N/A";
+
 typedef enum {
     MAIN_ACTION_FUSE_MAP = 0,
     MAIN_ACTION_EXIT = 1,
@@ -359,8 +362,8 @@ u8 get_required_fuses(u8 major, u8 minor, u8 patch) {
         }
     }
 
-    // Fallback: return 1 if database not loaded or version not found
-    return 1;
+    // No fuse requirement is known for this firmware.
+    return 0;
 }
 
 
@@ -409,8 +412,10 @@ void debug_log(const char *msg) {
 
 // Detect firmware from SystemVersion NCA in SYSTEM partition
 // Requires BIS key 2 to be derived and set in SE
-bool detect_firmware_from_nca(u8 *major, u8 *minor, u8 *patch, key_storage_t *keys) {
+bool detect_firmware_from_nca(u8 *major, u8 *minor, u8 *patch, key_storage_t *keys, bool *read_failed) {
     bool result = false;
+    if (read_failed)
+        *read_failed = true;
 
     debug_log("NCA: Start");
 
@@ -476,7 +481,8 @@ bool detect_firmware_from_nca(u8 *major, u8 *minor, u8 *patch, key_storage_t *ke
     if (f_opendir(&dir, "bis:/Contents/registered") == FR_OK) {
         debug_log("NCA: Directory opened, scanning...");
         int file_count = 0;
-        while (f_readdir(&dir, &fno) == FR_OK && fno.fname[0]) {
+        FRESULT dir_result;
+        while ((dir_result = f_readdir(&dir, &fno)) == FR_OK && fno.fname[0]) {
             file_count++;
             if (use_external_db) {
                 for (size_t i = 0; i < nca_db_count; i++) {
@@ -491,6 +497,8 @@ bool detect_firmware_from_nca(u8 *major, u8 *minor, u8 *patch, key_storage_t *ke
             }
             if (result) break;
         }
+        if (read_failed)
+            *read_failed = dir_result != FR_OK;
         char buf[64];
         s_printf(buf, "NCA: Scanned %d files", file_count);
         debug_log(buf);
@@ -507,6 +515,45 @@ bool detect_firmware_from_nca(u8 *major, u8 *minor, u8 *patch, key_storage_t *ke
     debug_log("NCA: Cleanup done");
 
     return result;
+}
+
+static void detect_emummc_firmware(key_storage_t *keys) {
+    FRESULT config_result = f_stat("emuMMC/emummc.ini", NULL);
+    if (config_result == FR_NO_FILE || config_result == FR_NO_PATH)
+        return;
+    if (config_result != FR_OK) {
+        strcpy(emummc_firmware, "Read failed");
+        return;
+    }
+    if (!emu_cfg.enabled) {
+        strcpy(emummc_firmware, "Disabled");
+        return;
+    }
+
+    emummc_type = emu_cfg.sector ? "SD Partition" : "SD Files";
+    strcpy(emummc_firmware, "Read failed");
+    bool force_disabled = h_cfg.emummc_force_disable;
+    bool read_only = emu_cfg.read_only;
+    h_cfg.emummc_force_disable = false;
+    emu_cfg.read_only = true;
+    bool muted = gfx_con.mute;
+    gfx_con.mute = true;
+
+    if (emummc_storage_init_mmc() == 0) {
+        u8 major = 0, minor = 0, patch = 0;
+        bool read_failed = false;
+        if (detect_firmware_from_nca(&major, &minor, &patch, keys, &read_failed))
+            s_printf(emummc_firmware, "%d.%d.%d", major, minor, patch);
+        else if (!read_failed)
+            strcpy(emummc_firmware, database_file_loaded ? "Unknown in DB" : "Database missing");
+    }
+
+    // Keep SD mounted for screenshots and returning to Hekate.
+    if (emmc_storage.initialized)
+        sdmmc_storage_end(&emmc_storage);
+    gfx_con.mute = muted;
+    emu_cfg.read_only = read_only;
+    h_cfg.emummc_force_disable = force_disabled;
 }
 
 void print_centered(int y, const char *text) {
@@ -570,89 +617,75 @@ void show_fuse_check_horizontal(u8 burnt_fuses, u8 fw_major, u8 fw_minor, u8 fw_
     else
         s_printf(fw_version, "N/A");
 
+    const char *status;
+    const char *message;
+    const char *detail = "";
+    const char *hint = "";
+    u32 status_color = COLOR_YELLOW;
+    char mismatch_message[80];
+
+    if (!database_file_loaded) {
+        status = "OFW STATUS: DATABASE MISSING";
+        message = "Download the full release; copy its config folder to SD.";
+        detail = "Required: sd:/config/fusecheck/fusecheck_db.txt";
+        hint = "Download: github.com/sthetix/FuseCheck/releases";
+    } else if (!fw_detected) {
+        status = "OFW STATUS: FIRMWARE NOT DETECTED";
+        message = "sysMMC firmware could not be read or identified.";
+        detail = "Check for an updated database or build.";
+        hint = "Download: github.com/sthetix/FuseCheck/releases";
+    } else if (!required_fuses) {
+        status = "OFW STATUS: FUSE REQUIREMENT UNKNOWN";
+        message = "sysMMC firmware has no matching fuse table entry.";
+        detail = "Update the database to check OFW fuse compatibility.";
+        hint = "Download: github.com/sthetix/FuseCheck/releases";
+    } else if (burnt_fuses != required_fuses) {
+        status = burnt_fuses < required_fuses ? "OFW STATUS: FUSE MISMATCH" : "OFW STATUS: FUSE MISMATCH (OVERBURNT)";
+        status_color = COLOR_RED;
+        if (burnt_fuses < required_fuses)
+            s_printf(mismatch_message, "OFW will not boot: %d fuse(s) missing.", required_fuses - burnt_fuses);
+        else
+            s_printf(mismatch_message, "OFW will not boot: %d extra fuse(s) burnt.", burnt_fuses - required_fuses);
+        message = mismatch_message;
+        detail = "System will black screen on OFW boot.";
+        hint = "What will work: CFW (Atmosphere)";
+    } else {
+        status = "OFW STATUS: PERFECT MATCH";
+        status_color = COLOR_GREEN;
+        message = "OFW can boot normally.";
+        detail = "Burnt fuses match the sysMMC firmware's table entry.";
+    }
+
     SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
     print_centered(48, "Nintendo Switch Fuse Compatibility");
 
     print_field(180, 144, "Serial: ", serial[0] ? serial : "N/A");
     print_field(180, 184, "Console: ", get_console_name(hw_type));
+    print_field(180, 224, "emuMMC Type: ", emummc_type);
 
-    print_field(720, 144, "Firmware: ", database_file_loaded ? fw_version : "N/A");
-    print_field_num(720, 184, "Burnt Fuses: ", burnt_fuses);
-    gfx_con_setpos(720, 224);
+    print_field(680, 144, "OFW / sysMMC: ", database_file_loaded ? fw_version : "N/A");
+    print_field(680, 184, "emuMMC Firmware: ", emummc_firmware);
+    print_field_num(680, 224, "Burnt Fuses: ", burnt_fuses);
+    gfx_con_setpos(680, 264);
     SETCOLOR(0xFFAAAAAA, COLOR_DEFAULT);
-    gfx_puts("Required Fuses: ");
+    gfx_puts("OFW Required Fuses: ");
     SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
-    if (database_file_loaded && fw_detected)
+    if (database_file_loaded && fw_detected && required_fuses)
         gfx_printf("%d", required_fuses);
     else
         gfx_puts("N/A");
 
-    if (!database_file_loaded) {
-        SETCOLOR(COLOR_YELLOW, COLOR_DEFAULT);
-        gfx_con_setpos(180, 312);
-        gfx_puts("STATUS: DATABASE MISSING");
-
-        gfx_con_setpos(180, 368);
-        SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
-        gfx_puts("Copy config folder from release archive to SD card");
-
-        gfx_con_setpos(180, 416);
-        SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
-        gfx_puts("Required: sd:/config/fusecheck/fusecheck_db.txt");
-    } else if (!fw_detected) {
-        SETCOLOR(COLOR_YELLOW, COLOR_DEFAULT);
-        gfx_con_setpos(180, 312);
-        gfx_puts("STATUS: FIRMWARE NOT DETECTED");
-
-        gfx_con_setpos(180, 368);
-        SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
-        gfx_puts("Your firmware is not in the database.");
-
-        gfx_con_setpos(180, 416);
-        SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
-        gfx_puts("Check for an updated build at github.com/sthetix/FuseCheck");
-    } else if (burnt_fuses < required_fuses) {
-        SETCOLOR(COLOR_RED, COLOR_DEFAULT);
-        gfx_con_setpos(180, 312);
-        gfx_puts("STATUS: FUSE MISMATCH");
-
-        gfx_con_setpos(180, 368);
-        SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
-        gfx_printf("Missing %d fuse(s) - OFW WILL NOT BOOT!", required_fuses - burnt_fuses);
-
-        gfx_con_setpos(180, 416);
-        gfx_puts("System will black screen on OFW boot");
-
-        gfx_con_setpos(180, 480);
-        SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
-        gfx_puts("What will work: CFW (Atmosphere)");
-    } else if (burnt_fuses > required_fuses) {
-        SETCOLOR(COLOR_RED, COLOR_DEFAULT);
-        gfx_con_setpos(180, 312);
-        gfx_puts("STATUS: FUSE MISMATCH (OVERBURNT)");
-
-        gfx_con_setpos(180, 368);
-        SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
-        gfx_printf("Extra %d fuse(s) burnt - OFW WILL NOT BOOT!", burnt_fuses - required_fuses);
-
-        gfx_con_setpos(180, 416);
-        gfx_puts("System will black screen on OFW boot");
-
-        gfx_con_setpos(180, 480);
-        SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
-        gfx_puts("What will work: CFW (Atmosphere)");
-    } else {
-        SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
-        gfx_con_setpos(180, 312);
-        gfx_puts("STATUS: PERFECT MATCH");
-
-        gfx_con_setpos(180, 368);
-        SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
-        gfx_puts("Exact fuse count match - OFW WILL BOOT NORMALLY");
-
-        gfx_con_setpos(180, 416);
-        gfx_puts("All systems operational");
-    }
+    gfx_con_setpos(180, 312);
+    SETCOLOR(status_color, COLOR_DEFAULT);
+    gfx_puts(status);
+    gfx_con_setpos(180, 368);
+    SETCOLOR(COLOR_WHITE, COLOR_DEFAULT);
+    gfx_puts(message);
+    gfx_con_setpos(180, 416);
+    gfx_puts(detail);
+    gfx_con_setpos(180, 480);
+    SETCOLOR(COLOR_CYAN, COLOR_DEFAULT);
+    gfx_puts(hint);
 
     draw_action(320, 616, "View Fuse Map", selected_action == MAIN_ACTION_FUSE_MAP);
     draw_action(700, 616, "Return to Hekate", selected_action == MAIN_ACTION_EXIT);
@@ -805,9 +838,11 @@ void ipl_main() {
             }
         }
         // Detect firmware version from NCA (also uses GPP, loads BIS key 2 for SYSTEM)
-        fw_detected = detect_firmware_from_nca(&fw_major, &fw_minor, &fw_patch, &keys);
+        fw_detected = detect_firmware_from_nca(&fw_major, &fw_minor, &fw_patch, &keys, NULL);
         emummc_storage_end();
     }
+
+    detect_emummc_firmware(&keys);
 
     // fw_major/fw_minor/fw_patch remain 0 if not detected; fw_detected gates display
 
