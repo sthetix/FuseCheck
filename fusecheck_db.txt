@@ -37,12 +37,13 @@
 [FUSE] 21.0.0-21.2.0 22
 [FUSE] 22.0.0-22.1.0 23
 [FUSE] 22.5.0 23
-[FUSE] 23.0.0 24
+[FUSE] 23.0.0-23.0.1 24
 
 # ===== NCA DATABASE =====
 # Format: [NCA] <version> <nca_filename>
 # Source: SystemVersion Title ID 0100000000000809
 
+[NCA] 23.0.1 00e57b67b4dbd750a2df0574cddc123d.nca
 [NCA] 23.0.0 2377a6f36c2cc42c121cad2ffac236a9.nca
 [NCA] 22.5.0 f1a867e9f4abb0d6e3c6682a148cff1a.nca
 [NCA] 22.1.0 2464b8c4d9cd53c5d957faa6dc8e3788.nca
